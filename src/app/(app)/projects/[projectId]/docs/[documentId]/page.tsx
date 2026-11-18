@@ -43,6 +43,9 @@ export default async function DocViewPage({
         <div className="flex items-start justify-between gap-3">
           <h1 className="font-display text-2xl font-semibold text-ink">{doc.title}</h1>
           <div className="flex shrink-0 gap-2">
+            <Link href={scopedHref(`/projects/${projectId}/docs/${documentId}/history`, teamId)} className="ac-btn-ghost">
+              历史
+            </Link>
             <Link href={scopedHref(`/projects/${projectId}/docs/${documentId}/edit`, teamId)} className="ac-btn-ghost">
               编辑
             </Link>

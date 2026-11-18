@@ -4,7 +4,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { createDocument, updateDocument, deleteDocument } from "@/lib/document";
+import { createDocument, updateDocument, deleteDocument, restoreDocumentVersion } from "@/lib/document";
 import { AppError } from "@/lib/errors";
 import { scopedHref } from "@/lib/workbench-navigation";
 
@@ -94,4 +94,26 @@ export async function deleteDocumentAction(formData: FormData) {
   await deleteDocument(session.user.id, parsed.data.documentId);
   revalidatePath(`/projects/${parsed.data.projectId}/docs`);
   redirect(scopedHref(`/projects/${parsed.data.projectId}/docs`, parsed.data.team));
+}
+
+const restoreSchema = z.object({
+  projectId: z.uuid(),
+  documentId: z.uuid(),
+  versionId: z.uuid(),
+  team: z.uuid().optional(),
+});
+
+export async function restoreDocumentVersionAction(formData: FormData) {
+  const session = await auth();
+  if (!session?.user) throw new AppError("请先登录");
+
+  const parsed = restoreSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) throw new AppError("参数无效");
+
+  await restoreDocumentVersion(session.user.id, parsed.data.documentId, parsed.data.versionId);
+  revalidatePath(`/projects/${parsed.data.projectId}/docs/${parsed.data.documentId}`);
+  revalidatePath(`/projects/${parsed.data.projectId}/docs/${parsed.data.documentId}/history`);
+  redirect(
+    scopedHref(`/projects/${parsed.data.projectId}/docs/${parsed.data.documentId}`, parsed.data.team),
+  );
 }

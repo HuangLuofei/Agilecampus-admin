@@ -547,6 +547,30 @@ export const documents = pgTable('documents', {
   index("documents_project_category_idx").on(t.projectId, t.category),
 ]);
 
+// 文档版本快照：每次保存（新建/编辑/恢复）写一行，供「版本历史」查看与恢复。
+// versionNumber 按文档自增（1 起）；(documentId, versionNumber) 唯一防并发撞号。
+// authorId 记该版本的编辑者（恢复时=恢复者），note 供自动备注（如「恢复自版本 N」）。
+export const documentVersions = pgTable(
+  "document_versions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    documentId: uuid("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    versionNumber: integer("version_number").notNull(),
+    title: text("title").notNull(),
+    content: text("content").notNull().default(""),
+    category: text("category"),
+    authorId: uuid("author_id").references(() => users.id, { onDelete: "set null" }),
+    note: text("note"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("document_versions_document_created_idx").on(t.documentId, t.createdAt),
+    uniqueIndex("document_versions_document_number_unique").on(t.documentId, t.versionNumber),
+  ],
+);
+
 // 5. 真人聊天：dm=全局一对一私聊，group=项目群聊（按项目初始化）
 export const chatRoomTypeEnum = pgEnum("chat_room_type", ["dm", "group"]);
 export type ChatRoomType = (typeof chatRoomTypeEnum.enumValues)[number];
