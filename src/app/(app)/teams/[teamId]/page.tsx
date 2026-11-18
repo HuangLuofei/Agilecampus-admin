@@ -194,6 +194,19 @@ export default async function TeamHomePage({
         )}
       </Section>
 
+      <section className="space-y-3">
+        <div className="flex items-center gap-2">
+          <span aria-hidden className="h-4 w-1 rounded-full bg-primary" />
+          <h2 className="font-display text-base font-semibold text-ink">成员工作量</h2>
+          <Link href={`/teams/${teamId}/workload`} className="ml-auto text-sm text-primary hover:underline">
+            查看成员负载 →
+          </Link>
+        </div>
+        <Link href={`/teams/${teamId}/workload`} className="ac-card block p-4 text-sm text-ink-soft hover:border-primary">
+          对比每位成员的未完成任务、逾期情况和粗略忙闲程度。
+        </Link>
+      </section>
+
       {/* 资源占用 */}
       <Section
         title="资源占用"

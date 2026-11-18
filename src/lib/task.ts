@@ -115,8 +115,8 @@ export async function assigneesByTask(
   return map;
 }
 
-async function validateMilestone(projectId: string, milestoneId: string) {
-  const [m] = await db
+async function validateMilestone(projectId: string, milestoneId: string, exec: DbTx | typeof db = db) {
+  const [m] = await exec
     .select({ id: milestones.id })
     .from(milestones)
     .where(and(eq(milestones.id, milestoneId), eq(milestones.projectId, projectId)));
@@ -219,7 +219,7 @@ export async function createTask(
     input.assigneeIds ?? (input.assigneeId ? [input.assigneeId] : []),
   );
   if (assigneeIds.length > 0) await validateAssignees(access.project.teamId, assigneeIds);
-  if (input.milestoneId) await validateMilestone(projectId, input.milestoneId);
+  if (input.milestoneId) await validateMilestone(projectId, input.milestoneId, exec);
   if (input.iterationId) await validateIteration(projectId, input.iterationId);
   if (input.parentTaskId) await validateParentTask(projectId, input.parentTaskId);
 

@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth";
 import { createTask, updateTask, deleteTask, setTaskSuccessors } from "@/lib/task";
 import { setTaskLabels } from "@/lib/label";
 import { createMilestone } from "@/lib/project";
+import { createGroupAssignmentTemplate } from "@/lib/project-template";
 import { AppError, ForbiddenError } from "@/lib/errors";
 import { createTaskComment, deleteTaskComment, updateTaskComment } from "@/lib/comment";
 import { markAllNotificationsRead, markNotificationRead } from "@/lib/notification";
@@ -100,6 +101,27 @@ export async function createMilestoneAction(
   }
   revalidatePath(`/projects/${parsed.data.projectId}`);
   return null;
+}
+
+export async function createGroupAssignmentTemplateAction(
+  _prev: FormState | { ok: true },
+  formData: FormData,
+): Promise<FormState | { ok: true }> {
+  const session = await auth();
+  if (!session?.user) return { error: "请先登录" };
+  const parsed = z.object({ projectId: z.uuid() }).safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: "项目参数无效" };
+
+  try {
+    await createGroupAssignmentTemplate(session.user.id, parsed.data.projectId);
+  } catch (e) {
+    if (e instanceof ForbiddenError) return { error: "仅团队组长可应用作业模板" };
+    if (e instanceof AppError) return { error: e.message };
+    throw e;
+  }
+  revalidatePath(`/projects/${parsed.data.projectId}`);
+  revalidatePath("/", "layout");
+  return { ok: true };
 }
 
 // 拖拽可改的字段白名单。校验与授权仍全数落在 updateTask

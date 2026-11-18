@@ -21,6 +21,7 @@ import { TaskAssets } from "./assets/task-assets";
 import { BackButton } from "@/components/back-button";
 import Link from "next/link";
 import { scopedHref } from "@/lib/workbench-navigation";
+import { WorkflowTemplate } from "./workflow-template";
 
 export default async function ProjectPage({
   params,
@@ -169,6 +170,8 @@ export default async function ProjectPage({
         milestones={projectMilestones}
         isAdmin={isAdmin}
       />
+
+      <WorkflowTemplate projectId={projectId} canApply={isAdmin} />
 
       <section className="space-y-3">
         <h2 className="font-medium text-ink">看板</h2>
