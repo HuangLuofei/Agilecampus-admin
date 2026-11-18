@@ -1,7 +1,7 @@
 import { alias } from "drizzle-orm/pg-core";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { db } from "@/db";
-import { documents, users } from "@/db/schema";
+import { db, type DbTx } from "@/db";
+import { documentVersions, documents, users } from "@/db/schema";
 import { AppError, ForbiddenError } from "./errors";
 import { getProjectForUser } from "./project";
 import { notifyTeamMembers } from "./notification";
@@ -42,6 +42,54 @@ async function requireDocumentAccess(actorId: string, documentId: string) {
   const access = await getProjectForUser(actorId, doc.projectId);
   if (!access) throw new ForbiddenError();
   return { doc, access };
+}
+
+// 版本作者别名（与 documents 的 createdById/updatedById 分开，避免同表二次 join 冲突）
+const versionAuthor = alias(users, "version_author");
+
+// 写一个新版本快照：versionNumber 取当前最大 + 1。若与最近一版 title/content/category
+// 完全相同则跳过（返回 null），避免连续保存刷出无意义版本。exec 可为 db 或事务 tx。
+async function appendVersion(
+  exec: DbTx | typeof db,
+  documentId: string,
+  snapshot: { title: string; content: string; category: string | null },
+  authorId: string,
+  note?: string | null,
+) {
+  const [latest] = await exec
+    .select({
+      versionNumber: documentVersions.versionNumber,
+      title: documentVersions.title,
+      content: documentVersions.content,
+      category: documentVersions.category,
+    })
+    .from(documentVersions)
+    .where(eq(documentVersions.documentId, documentId))
+    .orderBy(desc(documentVersions.versionNumber))
+    .limit(1);
+
+  if (
+    latest &&
+    latest.title === snapshot.title &&
+    latest.content === snapshot.content &&
+    (latest.category ?? null) === (snapshot.category ?? null)
+  ) {
+    return null;
+  }
+
+  const [version] = await exec
+    .insert(documentVersions)
+    .values({
+      documentId,
+      versionNumber: (latest?.versionNumber ?? 0) + 1,
+      title: snapshot.title,
+      content: snapshot.content,
+      category: snapshot.category,
+      authorId,
+      note: note ?? null,
+    })
+    .returning();
+  return version;
 }
 
 // 列举项目文档（倒序），支持按关键词搜索与按分类过滤
@@ -129,17 +177,25 @@ export async function createDocument(
   if (!access) throw new ForbiddenError();
 
   const title = normalizeTitle(input.title);
-  const [doc] = await db
-    .insert(documents)
-    .values({
-      projectId,
-      title,
-      content: input.content ?? "",
-      category: normalizeCategory(input.category),
-      createdById: actorId,
-      updatedById: actorId,
-    })
-    .returning();
+  const content = input.content ?? "";
+  const category = normalizeCategory(input.category);
+
+  const doc = await db.transaction(async (tx) => {
+    const [inserted] = await tx
+      .insert(documents)
+      .values({
+        projectId,
+        title,
+        content,
+        category,
+        createdById: actorId,
+        updatedById: actorId,
+      })
+      .returning();
+    // 建文档即写入版本 1（初始快照）
+    await appendVersion(tx, inserted.id, { title, content, category }, actorId);
+    return inserted;
+  });
 
   void notifyTeamMembers({
     teamId: access.project.teamId,
@@ -161,21 +217,27 @@ export async function updateDocument(
 ) {
   const { doc, access } = await requireDocumentAccess(actorId, documentId);
 
-  const title = patch.title === undefined ? undefined : normalizeTitle(patch.title);
+  const title = patch.title === undefined ? doc.title : normalizeTitle(patch.title);
+  const content = patch.content === undefined ? doc.content : patch.content;
   const category =
-    patch.category === undefined ? undefined : normalizeCategory(patch.category);
+    patch.category === undefined ? doc.category : normalizeCategory(patch.category);
 
-  const [updated] = await db
-    .update(documents)
-    .set({
-      ...(title !== undefined && { title }),
-      ...(patch.content !== undefined && { content: patch.content }),
-      ...(category !== undefined && { category }),
-      updatedAt: new Date(),
-      updatedById: actorId,
-    })
-    .where(eq(documents.id, documentId))
-    .returning();
+  const updated = await db.transaction(async (tx) => {
+    const [u] = await tx
+      .update(documents)
+      .set({
+        title,
+        content,
+        category,
+        updatedAt: new Date(),
+        updatedById: actorId,
+      })
+      .where(eq(documents.id, documentId))
+      .returning();
+    // 快照保存后的新状态；若与上一版完全相同，appendVersion 内部去重跳过
+    await appendVersion(tx, documentId, { title, content, category }, actorId);
+    return u;
+  });
 
   void notifyTeamMembers({
     teamId: access.project.teamId,
@@ -203,4 +265,102 @@ export async function deleteDocument(actorId: string, documentId: string) {
     linkUrl: `/projects/${doc.projectId}/docs`,
     projectId: doc.projectId,
   });
+}
+
+// ==================== 版本历史 ====================
+
+// 版本列表（按版本号倒序，最新在前），含作者名与备注
+export async function listDocumentVersions(actorId: string, documentId: string) {
+  await requireDocumentAccess(actorId, documentId);
+  return db
+    .select({
+      id: documentVersions.id,
+      documentId: documentVersions.documentId,
+      versionNumber: documentVersions.versionNumber,
+      title: documentVersions.title,
+      category: documentVersions.category,
+      authorId: documentVersions.authorId,
+      authorName: versionAuthor.name,
+      note: documentVersions.note,
+      createdAt: documentVersions.createdAt,
+    })
+    .from(documentVersions)
+    .leftJoin(versionAuthor, eq(documentVersions.authorId, versionAuthor.id))
+    .where(eq(documentVersions.documentId, documentId))
+    .orderBy(desc(documentVersions.versionNumber));
+}
+
+// 取单个版本只读内容（含正文）；不存在返回 null，供页面 notFound()
+export async function getDocumentVersion(
+  actorId: string,
+  documentId: string,
+  versionId: string,
+) {
+  await requireDocumentAccess(actorId, documentId);
+  const [version] = await db
+    .select({
+      id: documentVersions.id,
+      documentId: documentVersions.documentId,
+      versionNumber: documentVersions.versionNumber,
+      title: documentVersions.title,
+      content: documentVersions.content,
+      category: documentVersions.category,
+      authorId: documentVersions.authorId,
+      authorName: versionAuthor.name,
+      note: documentVersions.note,
+      createdAt: documentVersions.createdAt,
+    })
+    .from(documentVersions)
+    .leftJoin(versionAuthor, eq(documentVersions.authorId, versionAuthor.id))
+    .where(and(eq(documentVersions.id, versionId), eq(documentVersions.documentId, documentId)));
+  return version ?? null;
+}
+
+// 恢复旧版本：用该版本内容覆盖当前文档，并生成一个新版本（不回滚覆盖历史，审计链完整）
+export async function restoreDocumentVersion(
+  actorId: string,
+  documentId: string,
+  versionId: string,
+) {
+  const { doc, access } = await requireDocumentAccess(actorId, documentId);
+
+  const [target] = await db
+    .select()
+    .from(documentVersions)
+    .where(and(eq(documentVersions.id, versionId), eq(documentVersions.documentId, documentId)));
+  if (!target) throw new AppError("版本不存在");
+
+  const restored = await db.transaction(async (tx) => {
+    const [u] = await tx
+      .update(documents)
+      .set({
+        title: target.title,
+        content: target.content,
+        category: target.category,
+        updatedAt: new Date(),
+        updatedById: actorId,
+      })
+      .where(eq(documents.id, documentId))
+      .returning();
+    // 恢复也走 appendVersion：目标内容与当前一致（无实际变化）则内部去重跳过
+    await appendVersion(
+      tx,
+      documentId,
+      { title: target.title, content: target.content, category: target.category },
+      actorId,
+      `恢复自版本 ${target.versionNumber}`,
+    );
+    return u;
+  });
+
+  void notifyTeamMembers({
+    teamId: access.project.teamId,
+    actorId,
+    type: "document_updated",
+    title: "文档已恢复",
+    content: `文档《${restored.title}》已恢复到版本 ${target.versionNumber}`,
+    linkUrl: `/projects/${doc.projectId}/docs/${documentId}`,
+    projectId: doc.projectId,
+  });
+  return restored;
 }
