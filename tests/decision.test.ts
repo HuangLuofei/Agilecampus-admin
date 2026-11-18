@@ -25,15 +25,17 @@ async function makeUser(label: string) {
 async function scene() {
   const admin = await makeUser("组长");
   const member = await makeUser("成员");
+  const peer = await makeUser("其他成员");
   const outsider = await makeUser("路人");
   const team = await createTeam(admin.id, "决策记录测试组");
   await joinTeam(member.id, team.inviteCode);
+  await joinTeam(peer.id, team.inviteCode);
   const decision = await createTeamDecision(member.id, team.id, {
     title: "课题技术选型",
     context: "候选 A：自研实现；候选 B：采用现成框架",
     finalOption: "采用方案 B，理由是开发周期更短",
   });
-  return { admin, member, outsider, team, decision };
+  return { admin, member, peer, outsider, team, decision };
 }
 
 describe("小组决策记录", () => {
@@ -61,8 +63,8 @@ describe("小组决策记录", () => {
   });
 
   it("重复确认报错；普通成员不能确认他人的记录，组长可以", async () => {
-    const { admin, member, decision } = await scene();
-    await expect(confirmTeamDecision(member.id, decision.id)).rejects.toBeInstanceOf(ForbiddenError);
+    const { admin, peer, decision } = await scene();
+    await expect(confirmTeamDecision(peer.id, decision.id)).rejects.toBeInstanceOf(ForbiddenError);
     await confirmTeamDecision(admin.id, decision.id);
     await expect(confirmTeamDecision(admin.id, decision.id)).rejects.toBeInstanceOf(AppError);
   });

@@ -296,7 +296,11 @@ export async function getDocumentVersion(
   documentId: string,
   versionId: string,
 ) {
-  await requireDocumentAccess(actorId, documentId);
+  const [doc] = await db
+    .select({ projectId: documents.projectId })
+    .from(documents)
+    .where(eq(documents.id, documentId));
+  if (!doc || !(await getProjectForUser(actorId, doc.projectId))) return null;
   const [version] = await db
     .select({
       id: documentVersions.id,
