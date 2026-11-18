@@ -168,6 +168,17 @@ export function AppSidebar({
               {expanded &&
                 <>
                 <Link
+                  href={`/teams/${t.id}/votes`}
+                  className={`flex items-center gap-2 rounded-field py-1.5 pl-9 pr-2 text-[13px] ${
+                    pathname.startsWith(`/teams/${t.id}/votes`)
+                      ? "bg-white/15 text-white"
+                      : "text-white/60 hover:bg-white/10 hover:text-white"
+                  }`}
+                >
+                  <span className="h-1 w-1 shrink-0 rounded-full bg-white/40" />
+                  <span className="truncate">群投票与评审</span>
+                </Link>
+                <Link
                   href={`/teams/${t.id}/meetings`}
                   className={`flex items-center gap-2 rounded-field py-1.5 pl-9 pr-2 text-[13px] ${
                     pathname.startsWith(`/teams/${t.id}/meetings`)

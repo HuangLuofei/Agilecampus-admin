@@ -124,6 +124,20 @@ export default async function TeamHomePage({
         </div>
       </section>
 
+      {/* 群投票与方案评审 */}
+      <section className="space-y-3">
+        <div className="flex items-center gap-2">
+          <span aria-hidden className="h-4 w-1 rounded-full bg-primary" />
+          <h2 className="font-display text-base font-semibold text-ink">群投票与方案评审</h2>
+          <Link href={`/teams/${teamId}/votes`} className="ml-auto text-sm text-primary hover:underline">
+            发起或参与投票 →
+          </Link>
+        </div>
+        <Link href={`/teams/${teamId}/votes`} className="ac-card block p-4 text-sm text-ink-soft hover:border-primary">
+          对选题、设计稿和技术方案快速投票，集中查看票数、评审意见与最终采用方案。
+        </Link>
+      </section>
+
       {/* 会议与行动项 */}
       <section className="space-y-3">
         <div className="flex items-center gap-2">

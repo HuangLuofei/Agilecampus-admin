@@ -793,3 +793,88 @@ export const teamDecisions = pgTable("team_decisions", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("team_decisions_team_created_idx").on(t.teamId, t.createdAt)]);
+
+// ==================== 群投票与方案评审 ====================
+
+export const proposalCategoryEnum = pgEnum("proposal_category", [
+  "topic",
+  "design",
+  "technical",
+]);
+export type ProposalCategory = (typeof proposalCategoryEnum.enumValues)[number];
+
+export const proposalPollStatusEnum = pgEnum("proposal_poll_status", ["open", "closed"]);
+export type ProposalPollStatus = (typeof proposalPollStatusEnum.enumValues)[number];
+
+// 一次投票对应一个团队议题；选项在创建时固定，避免投票过程中增删导致结果失真。
+export const proposalPolls = pgTable(
+  "proposal_polls",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+    createdById: uuid("created_by_id").references(() => users.id, { onDelete: "set null" }),
+    title: text("title").notNull(),
+    category: proposalCategoryEnum("category").notNull(),
+    description: text("description").notNull().default(""),
+    referenceUrl: text("reference_url"),
+    closesAt: timestamp("closes_at", { withTimezone: true }),
+    status: proposalPollStatusEnum("status").notNull().default("open"),
+    // 结束时由主持人确认采用哪个选项；保存选项 id 与标题快照，选项不变时可直接追溯。
+    finalOptionId: uuid("final_option_id"),
+    finalOptionLabel: text("final_option_label"),
+    decidedById: uuid("decided_by_id").references(() => users.id, { onDelete: "set null" }),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("proposal_polls_team_created_idx").on(t.teamId, t.createdAt),
+    index("proposal_polls_team_status_idx").on(t.teamId, t.status),
+  ],
+);
+
+export const proposalOptions = pgTable(
+  "proposal_options",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    pollId: uuid("poll_id").notNull().references(() => proposalPolls.id, { onDelete: "cascade" }),
+    label: text("label").notNull(),
+    description: text("description").notNull().default(""),
+    position: integer("position").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("proposal_options_poll_position_idx").on(t.pollId, t.position),
+    uniqueIndex("proposal_options_poll_position_unique").on(t.pollId, t.position),
+  ],
+);
+
+// 每位成员在每个投票中只有一票；改票走 upsert，保留首次投票和最近改票时间。
+export const proposalVotes = pgTable(
+  "proposal_votes",
+  {
+    pollId: uuid("poll_id").notNull().references(() => proposalPolls.id, { onDelete: "cascade" }),
+    optionId: uuid("option_id").notNull().references(() => proposalOptions.id, { onDelete: "cascade" }),
+    voterId: uuid("voter_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.pollId, t.voterId] }),
+    index("proposal_votes_option_idx").on(t.optionId),
+    index("proposal_votes_voter_idx").on(t.voterId),
+  ],
+);
+
+export const proposalComments = pgTable(
+  "proposal_comments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    pollId: uuid("poll_id").notNull().references(() => proposalPolls.id, { onDelete: "cascade" }),
+    authorId: uuid("author_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    content: text("content").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("proposal_comments_poll_created_idx").on(t.pollId, t.createdAt)],
+);
