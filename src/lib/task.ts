@@ -199,6 +199,7 @@ export async function createTask(
   input: {
     title: string;
     description?: string;
+    acceptanceCriteria?: string;
     assigneeId?: string;
     // 多负责人（新）。与 assigneeId 二选一：同时给出时以 assigneeIds 为准。
     assigneeIds?: string[];
@@ -230,6 +231,7 @@ export async function createTask(
       createdById: actorId,
       title: input.title,
       description: input.description,
+      acceptanceCriteria: input.acceptanceCriteria,
       // 主负责人 = 集合首位，保持既有单值读取路径可用
       assigneeId: assigneeIds[0] ?? null,
       startDate: input.startDate,
@@ -283,6 +285,7 @@ export async function updateTask(
   patch: {
     title?: string;
     description?: string | null;
+    acceptanceCriteria?: string | null;
     assigneeId?: string | null;
     // 多负责人（新）。两种写法并存：assigneeIds 优先，assigneeId 视为 [id] / []。
     assigneeIds?: string[] | null;
@@ -355,6 +358,7 @@ export async function updateTask(
     .set({
       ...(patch.title !== undefined && { title: patch.title }),
       ...(patch.description !== undefined && { description: patch.description }),
+      ...(patch.acceptanceCriteria !== undefined && { acceptanceCriteria: patch.acceptanceCriteria }),
       ...(assigneePatch !== undefined && { assigneeId: assigneePatch[0] ?? null }),
       ...(patch.startDate !== undefined && { startDate: patch.startDate }),
       ...(patch.dueDate !== undefined && { dueDate: patch.dueDate }),
@@ -504,6 +508,7 @@ export async function listProjectTasks(actorId: string, projectId: string) {
       id: tasks.id,
       title: tasks.title,
       description: tasks.description,
+      acceptanceCriteria: tasks.acceptanceCriteria,
       status: tasks.status,
       priority: tasks.priority,
       startDate: tasks.startDate,
@@ -550,6 +555,7 @@ export async function listSubtasks(actorId: string, parentTaskId: string) {
       id: tasks.id,
       title: tasks.title,
       description: tasks.description,
+      acceptanceCriteria: tasks.acceptanceCriteria,
       status: tasks.status,
       priority: tasks.priority,
       startDate: tasks.startDate,
@@ -606,6 +612,7 @@ export async function getTaskDetail(actorId: string, taskId: string) {
       projectId: tasks.projectId,
       title: tasks.title,
       description: tasks.description,
+      acceptanceCriteria: tasks.acceptanceCriteria,
       completionNote: tasks.completionNote,
       status: tasks.status,
       priority: tasks.priority,

@@ -4,10 +4,13 @@ import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { getProjectForUser } from "@/lib/project";
 import { getDocument } from "@/lib/document";
+import { listDocumentComments } from "@/lib/document-comments";
+import { isTeamLead } from "@/lib/team-permissions";
 import { MarkdownBody } from "../markdown";
 import { deleteDocumentAction } from "../actions";
 import { BackButton } from "@/components/back-button";
 import { scopedHref } from "@/lib/workbench-navigation";
+import { DocumentComments } from "./document-comments";
 
 function fmtTime(d: Date): string {
   const p = (n: number) => String(n).padStart(2, "0");
@@ -34,6 +37,7 @@ export default async function DocViewPage({
 
   const doc = await getDocument(session.user.id, documentId);
   if (!doc || doc.projectId !== projectId) notFound();
+  const comments = await listDocumentComments(session.user.id, documentId);
 
   return (
     <main className="mx-auto max-w-3xl space-y-6">
@@ -77,6 +81,15 @@ export default async function DocViewPage({
           <p className="text-sm text-ink-faint">（空文档，点右上角「编辑」补充正文）</p>
         )}
       </article>
+
+      <DocumentComments
+        projectId={projectId}
+        documentId={documentId}
+        teamId={teamId}
+        currentUserId={session.user.id}
+        comments={comments}
+        canResolve={isTeamLead(access.role)}
+      />
     </main>
   );
 }

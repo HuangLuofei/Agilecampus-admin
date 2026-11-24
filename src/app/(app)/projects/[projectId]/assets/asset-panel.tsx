@@ -4,6 +4,13 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import type { AssetItem } from "./asset-types";
 import { formatSize, getAssetIcon, getAssetTypeLabel } from "./asset-types";
 
+const REVIEW_LABELS: Record<AssetItem["reviewStatus"], string> = {
+  draft: "草稿",
+  in_review: "审阅中",
+  approved: "已通过",
+  changes_requested: "需修改",
+};
+
 // 资产管理主面板：新建资产（上传文件 / 外部链接）+ 列表（预览 / 下载 / 重命名 / 删除）。
 // 项目归档后（projectArchived）上传、重命名、删除按钮一律置灰禁用。
 export function AssetPanel({
@@ -300,6 +307,7 @@ export function AssetPanel({
                       {a.uploadUserName ?? "已注销成员"} · {new Date(a.createdAt).toLocaleString("zh-CN")}
                     </p>
                     {a.description && <p className="mt-1 text-xs text-ink-soft">{a.description}</p>}
+                    <AssetReviewEditor asset={a} disabled={projectArchived} onSaved={load} onError={setError} />
                   </div>
                   <div className="flex shrink-0 flex-wrap items-center gap-2">
                     <a href={a.url} target="_blank" rel="noreferrer" className="ac-btn-ghost text-xs">
@@ -339,6 +347,56 @@ export function AssetPanel({
 
       {/* TODO(资产导出)：后续实现完整 UI —— 批量导出本项目资产清单（csv / zip 打包）。
           本期按约束不做搜索、批量下载，仅留占位。 */}
+    </div>
+  );
+}
+
+function AssetReviewEditor({
+  asset,
+  disabled,
+  onSaved,
+  onError,
+}: {
+  asset: AssetItem;
+  disabled: boolean;
+  onSaved: () => Promise<void>;
+  onError: (message: string | null) => void;
+}) {
+  const [status, setStatus] = useState(asset.reviewStatus);
+  const [note, setNote] = useState(asset.reviewNote ?? "");
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    if (disabled || saving) return;
+    setSaving(true);
+    onError(null);
+    try {
+      const res = await fetch(`/api/assets/${asset.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reviewStatus: status, reviewNote: note }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        onError(data.error ?? "保存审阅状态失败");
+        return;
+      }
+      await onSaved();
+    } catch {
+      onError("网络异常，请重试");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2 rounded-field bg-sunken p-2">
+      <span className="text-xs font-medium text-ink-soft">审阅状态</span>
+      <select value={status} onChange={(event) => setStatus(event.target.value as AssetItem["reviewStatus"])} disabled={disabled || saving} className="ac-field w-auto py-1 text-xs">
+        {Object.entries(REVIEW_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+      </select>
+      <input value={note} onChange={(event) => setNote(event.target.value)} disabled={disabled || saving} maxLength={2000} placeholder="审阅说明（选填）" className="ac-field min-w-48 flex-1 py-1 text-xs" />
+      <button type="button" disabled={disabled || saving} onClick={save} className="ac-btn-ghost py-1 text-xs">{saving ? "保存中…" : "保存状态"}</button>
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { registerAction, type FormState } from "./actions";
 
 export default function RegisterPage() {
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [stepError, setStepError] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const [state, formAction, pending] = useActionState<FormState, FormData>(
     registerAction,
@@ -15,7 +16,7 @@ export default function RegisterPage() {
   return (
     <main className="mx-auto mt-24 w-full max-w-sm space-y-4 ac-card p-6">
       <h1 className="font-display text-2xl font-semibold text-ink">注册 AgileCampus</h1>
-      <form ref={formRef} action={formAction} className="space-y-3">
+      <form ref={formRef} action={formAction} onChange={() => setStepError(null)} className="space-y-3">
         <input name="studentId" placeholder="学号（14 位数字，用于登录）" required pattern="[0-9]{14}" className="ac-field" />
         <input name="email" type="email" placeholder="登录邮箱" required className="ac-field" />
         <input name="password" type="password" placeholder="密码（至少 8 位）" required minLength={8} maxLength={64} className="ac-field" />
@@ -23,12 +24,22 @@ export default function RegisterPage() {
         <button
           type="button"
           onClick={() => {
-            if (formRef.current?.reportValidity()) setDetailsOpen(true);
+            const form = formRef.current;
+            if (!form) return;
+            if (!form.checkValidity()) {
+              setStepError("请先填写有效的学号、邮箱和密码：学号需为 14 位数字，密码至少 8 位。");
+              form.querySelector<HTMLElement>(":invalid")?.focus();
+              form.reportValidity();
+              return;
+            }
+            setStepError(null);
+            setDetailsOpen(true);
           }}
           className="ac-btn w-full"
         >
           下一步：填写个人信息
         </button>
+        {stepError && <p role="alert" className="text-sm text-high">{stepError}</p>}
         {detailsOpen && (
           <div role="dialog" aria-modal="true" aria-labelledby="register-profile-title" onKeyDown={(event) => { if (event.key === "Escape") setDetailsOpen(false); }} className="fixed inset-0 z-50 flex items-start justify-center bg-ink/45 p-4 sm:items-center">
             <div className="max-h-[calc(100vh-2rem)] w-full max-w-lg space-y-4 overflow-y-auto rounded-field bg-surface p-5 shadow-xl">
@@ -63,7 +74,12 @@ export default function RegisterPage() {
                 </div>
               </fieldset>
               {state?.error && <p className="text-sm text-high">{state.error}</p>}
-              <button type="submit" disabled={pending} className="ac-btn w-full">{pending ? "注册中…" : "完成注册"}</button>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <button type="submit" name="skipProfile" value="true" formNoValidate disabled={pending} className="ac-btn-ghost flex-1 justify-center px-3 py-2 text-sm">
+                  跳过个人信息
+                </button>
+                <button type="submit" disabled={pending} className="ac-btn flex-1 px-3 py-2 text-sm">{pending ? "注册中…" : "完成注册"}</button>
+              </div>
             </div>
           </div>
         )}

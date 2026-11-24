@@ -201,21 +201,26 @@ export async function reviewJoinRequest(
 
   const [team] = await db.select().from(teams).where(eq(teams.id, request.teamId));
 
-  if (decision === "approved") {
-    try {
-      await db
-        .insert(teamMembers)
-        .values({ teamId: request.teamId, userId: request.userId, role: "student" });
-    } catch (e) {
-      // 申请处理期间已通过其他途径入团：把申请关掉即可，不必报错
-      if (!isUniqueViolation(e)) throw e;
-    }
-  }
+  const updatedRequest = await db.transaction(async (tx) => {
+    const [updated] = await tx
+      .update(teamJoinRequests)
+      .set({ status: decision, reviewedBy: actorId, reviewedAt: new Date() })
+      .where(and(eq(teamJoinRequests.id, requestId), eq(teamJoinRequests.status, "pending")))
+      .returning();
+    if (!updated) throw new AppError("该申请已处理过");
 
-  await db
-    .update(teamJoinRequests)
-    .set({ status: decision, reviewedBy: actorId, reviewedAt: new Date() })
-    .where(eq(teamJoinRequests.id, requestId));
+    if (decision === "approved") {
+      try {
+        await tx
+          .insert(teamMembers)
+          .values({ teamId: request.teamId, userId: request.userId, role: "student" });
+      } catch (e) {
+        // 申请处理期间已通过其他途径入团：申请仍然正常关闭，不重复插入成员。
+        if (!isUniqueViolation(e)) throw e;
+      }
+    }
+    return updated;
+  });
 
   await createNotification({
     userId: request.userId,
@@ -228,6 +233,7 @@ export async function reviewJoinRequest(
     linkUrl: decision === "approved" ? `/teams/${request.teamId}` : null,
     actorId,
   });
+  return updatedRequest;
 }
 
 export async function requireTeamRole(
@@ -296,6 +302,46 @@ export async function updateMemberRole(
     .returning();
   if (!updated) throw new AppError("该成员不在团队中");
   return updated;
+}
+
+// 移除成员或退出小组。组长可以移除其他成员，普通成员只能移除自己。
+// 删除成员关系不会删除账号，历史任务中的负责人由既有外键规则保留为空。
+export async function removeTeamMember(actorId: string, teamId: string, targetUserId: string) {
+  const actor = await getTeamMembership(actorId, teamId);
+  if (!actor) throw new ForbiddenError();
+  if (actorId !== targetUserId && actor.role !== "admin") throw new ForbiddenError();
+
+  return db.transaction(async (tx) => {
+    const [target] = await tx
+      .select()
+      .from(teamMembers)
+      .where(and(eq(teamMembers.teamId, teamId), eq(teamMembers.userId, targetUserId)));
+    if (!target) throw new AppError("该成员不在团队中");
+
+    if (target.role === "admin") {
+      const [leadCount] = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(teamMembers)
+        .where(and(eq(teamMembers.teamId, teamId), eq(teamMembers.role, "admin")));
+      if ((leadCount?.count ?? 0) <= 1) {
+        throw new AppError("不能退出或移除唯一的组长，请先指定新的组长");
+      }
+    }
+
+    await tx
+      .delete(teamJoinRequests)
+      .where(and(eq(teamJoinRequests.teamId, teamId), eq(teamJoinRequests.userId, targetUserId), eq(teamJoinRequests.status, "pending")));
+    const [removed] = await tx
+      .delete(teamMembers)
+      .where(and(eq(teamMembers.teamId, teamId), eq(teamMembers.userId, targetUserId)))
+      .returning();
+    if (!removed) throw new AppError("该成员不在团队中");
+    return removed;
+  });
+}
+
+export async function leaveTeam(actorId: string, teamId: string) {
+  return removeTeamMember(actorId, teamId, actorId);
 }
 
 // ==================== 可分享邀请链接 ====================

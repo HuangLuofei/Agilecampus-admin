@@ -93,6 +93,7 @@ export const courseAssignments = pgTable("course_assignments", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   courseName: text("course_name").notNull(),
+  color: text("color").notNull().default("blue"),
   title: text("title").notNull(),
   details: text("details"),
   dueAt: timestamp("due_at", { withTimezone: true }).notNull(),
@@ -194,9 +195,15 @@ export const projectStatusEnum = pgEnum("project_status", ["active", "archived"]
 export const milestoneStatusEnum = pgEnum("milestone_status", ["open", "done"]);
 export const taskStatusEnum = pgEnum("task_status", ["todo", "doing", "done"]);
 export const taskPriorityEnum = pgEnum("task_priority", ["low", "medium", "high"]);
+export const taskDeliveryStatusEnum = pgEnum("task_delivery_status", [
+  "submitted",
+  "approved",
+  "rejected",
+]);
 export type ProjectStatus = (typeof projectStatusEnum.enumValues)[number];
 export type TaskStatus = (typeof taskStatusEnum.enumValues)[number];
 export type TaskPriority = (typeof taskPriorityEnum.enumValues)[number];
+export type TaskDeliveryStatus = (typeof taskDeliveryStatusEnum.enumValues)[number];
 
 export const projects = pgTable(
   "projects",
@@ -213,6 +220,36 @@ export const projects = pgTable(
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => [index("projects_team_idx").on(t.teamId)],
+);
+
+export const retrospectiveStatusEnum = pgEnum("retrospective_status", ["draft", "published"]);
+export type RetrospectiveStatus = (typeof retrospectiveStatusEnum.enumValues)[number];
+
+// 项目复盘：每次复盘独立留档，团队成员可共同查看，组长负责正式发布。
+export const projectRetrospectives = pgTable(
+  "project_retrospectives",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    createdById: uuid("created_by_id").references(() => users.id, { onDelete: "set null" }),
+    title: text("title").notNull(),
+    summary: text("summary").notNull().default(""),
+    wentWell: text("went_well").notNull().default(""),
+    challenges: text("challenges").notNull().default(""),
+    lessons: text("lessons").notNull().default(""),
+    nextSteps: text("next_steps").notNull().default(""),
+    status: retrospectiveStatusEnum("status").notNull().default("draft"),
+    publishedById: uuid("published_by_id").references(() => users.id, { onDelete: "set null" }),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("project_retrospectives_project_created_idx").on(t.projectId, t.createdAt),
+    index("project_retrospectives_project_status_idx").on(t.projectId, t.status),
+  ],
 );
 
 export const milestones = pgTable(
@@ -252,6 +289,7 @@ export const tasks = pgTable(
     title: text("title").notNull(),
     description: text("description"),
     completionNote: text("completion_note"),
+    acceptanceCriteria: text("acceptance_criteria"),
     assigneeId: uuid("assignee_id").references(() => users.id, {
       onDelete: "set null",
     }),
@@ -274,6 +312,27 @@ export const tasks = pgTable(
     index("tasks_iteration_idx").on(t.iterationId),
     uniqueIndex("tasks_source_message_unique").on(t.sourceMessageId).where(sql`${t.sourceMessageId} IS NOT NULL`),
   ],
+);
+
+// 任务交付与验收记录：每次提交独立留档，退回后可再次提交，审核历史持续保留。
+export const taskDeliveries = pgTable(
+  "task_deliveries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    taskId: uuid("task_id")
+      .notNull()
+      .references(() => tasks.id, { onDelete: "cascade" }),
+    submittedById: uuid("submitted_by_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    note: text("note").notNull(),
+    status: taskDeliveryStatusEnum("status").notNull().default("submitted"),
+    reviewNote: text("review_note"),
+    reviewedById: uuid("reviewed_by_id").references(() => users.id, { onDelete: "set null" }),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull().defaultNow(),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+  },
+  (t) => [index("task_deliveries_task_submitted_idx").on(t.taskId, t.submittedAt)],
 );
 
 export const messageRoleEnum = pgEnum("message_role", ["user", "assistant", "tool"]);
@@ -547,6 +606,27 @@ export const documents = pgTable('documents', {
   index("documents_project_category_idx").on(t.projectId, t.category),
 ]);
 
+// 文档讨论：支持引用一段文字发起评论，并由团队成员协作跟进。
+export const documentComments = pgTable(
+  "document_comments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    documentId: uuid("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    authorId: uuid("author_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    quote: text("quote"),
+    content: text("content").notNull(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    resolvedById: uuid("resolved_by_id").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("document_comments_document_created_idx").on(t.documentId, t.createdAt)],
+);
+
 // 文档版本快照：每次保存（新建/编辑/恢复）写一行，供「版本历史」查看与恢复。
 // versionNumber 按文档自增（1 起）；(documentId, versionNumber) 唯一防并发撞号。
 // authorId 记该版本的编辑者（恢复时=恢复者），note 供自动备注（如「恢复自版本 N」）。
@@ -661,6 +741,13 @@ export const userPinnedRooms = pgTable('user_pinned_rooms', {
 // 资产类型：file=上传文件（url 存文件地址），link=外部链接（url 存链接地址）
 export const assetTypeEnum = pgEnum("asset_type", ["file", "link"]);
 export type AssetType = (typeof assetTypeEnum.enumValues)[number];
+export const assetReviewStatusEnum = pgEnum("asset_review_status", [
+  "draft",
+  "in_review",
+  "approved",
+  "changes_requested",
+]);
+export type AssetReviewStatus = (typeof assetReviewStatusEnum.enumValues)[number];
 
 // 交付物类型：演示文稿(presentation) / 问卷(survey) / 代码包(code)；空=普通文件。
 // 用于任务产出物分类绑定与展示（任务详情分组、卡片角标）。
@@ -702,6 +789,10 @@ export const assets = pgTable(
     fileSize: bigint("file_size", { mode: "number" }),
     // 交付物类型（可空）：presentation=演示文稿 / survey=问卷 / code=代码包；null=普通文件
     deliverableKind: deliverableKindEnum("deliverable_kind"),
+    reviewStatus: assetReviewStatusEnum("review_status").notNull().default("draft"),
+    reviewNote: text("review_note"),
+    reviewedById: uuid("reviewed_by_id").references(() => users.id, { onDelete: "set null" }),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
     // 归档锁定：归档后不再展示于常规列表、禁止再编辑/删除/绑定
     isArchived: boolean("is_archived").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

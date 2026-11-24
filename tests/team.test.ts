@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { createUser } from "@/lib/user";
-import { createTeam, getTeamMembership, joinTeam, listTeamMembers, requireTeamRole, updateMemberRole } from "@/lib/team";
+import { createTeam, getTeamMembership, joinTeam, leaveTeam, listTeamMembers, removeTeamMember, requireTeamRole, updateMemberRole } from "@/lib/team";
 import { AppError } from "@/lib/errors";
 import { resetDb } from "./helpers";
 import { db } from "@/db";
@@ -211,5 +211,35 @@ describe("updateMemberRole", () => {
 
     await expect(updateMemberRole(owner.id, team.id, outsider.id, "teacher"))
       .rejects.toThrow("该成员不在团队中");
+  });
+});
+
+describe("removeTeamMember / leaveTeam", () => {
+  beforeEach(resetDb);
+
+  it("组长可移除成员，普通成员可退出小组", async () => {
+    const owner = await makeUser("owner@example.com");
+    const team = await createTeam(owner.id, "东吴实验室");
+    const member = await makeUser("member@example.com");
+    await joinTeam(member.id, team.inviteCode);
+
+    await removeTeamMember(owner.id, team.id, member.id);
+    expect(await getTeamMembership(member.id, team.id)).toBeNull();
+
+    const second = await makeUser("second@example.com");
+    await joinTeam(second.id, team.inviteCode);
+    await leaveTeam(second.id, team.id);
+    expect(await getTeamMembership(second.id, team.id)).toBeNull();
+  });
+
+  it("不能移除或退出唯一组长，普通成员不能移除别人", async () => {
+    const owner = await makeUser("owner@example.com");
+    const team = await createTeam(owner.id, "东吴实验室");
+    const member = await makeUser("member@example.com");
+    await joinTeam(member.id, team.inviteCode);
+
+    await expect(removeTeamMember(member.id, team.id, owner.id)).rejects.toThrow("没有权限");
+    await expect(leaveTeam(owner.id, team.id)).rejects.toThrow("唯一的组长");
+    await expect(removeTeamMember(owner.id, team.id, owner.id)).rejects.toThrow("唯一的组长");
   });
 });

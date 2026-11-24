@@ -1,4 +1,5 @@
 // 资产相关的共享类型与纯函数（供资产列表 / 选择器 / 任务挂载 / 文档编辑器复用）
+import type { AssetReviewStatus } from "@/db/schema";
 import type { DeliverableKind } from "@/lib/asset-deliverables";
 
 export type { DeliverableKind };
@@ -17,6 +18,10 @@ export type AssetItem = {
   fileMime: string | null;
   fileSize: number | null;
   deliverableKind: DeliverableKind | null;
+  reviewStatus: AssetReviewStatus;
+  reviewNote: string | null;
+  reviewedById: string | null;
+  reviewedAt: string | null;
   isArchived: boolean;
   createdAt: string;
   updatedAt: string;

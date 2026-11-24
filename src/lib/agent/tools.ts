@@ -1,5 +1,8 @@
 import { tool } from "ai";
 import { z } from "zod";
+import { desc, inArray } from "drizzle-orm";
+import { db } from "@/db";
+import { taskDependencies, taskDeliveries } from "@/db/schema";
 import { listMyProjects, listProjectMilestones } from "@/lib/project";
 import { listProjectTasks } from "@/lib/task";
 import type { TaskStatus } from "@/db/schema";
@@ -71,6 +74,85 @@ export async function listMilestonesBrief(actorId: string, projectId: string) {
   }));
 }
 
+function addDays(date: string, days: number) {
+  const value = new Date(`${date}T00:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+
+// 读取项目风险信号，供助手给出有依据的提醒与下一步建议。
+// 所有任务先经 listProjectTasks 做项目成员校验，关联查询只补充依赖和验收状态。
+export async function analyzeProjectRisks(
+  actorId: string,
+  projectId: string,
+  horizonDays = 7,
+) {
+  const tasks = await listProjectTasks(actorId, projectId);
+  const today = new Date().toISOString().slice(0, 10);
+  const horizonEnd = addDays(today, horizonDays);
+  const taskById = new Map(tasks.map((task) => [task.id, task]));
+
+  const dependencyRows = tasks.length
+    ? await db
+        .select({ predecessorId: taskDependencies.predecessorId, successorId: taskDependencies.successorId })
+        .from(taskDependencies)
+        .where(inArray(taskDependencies.successorId, tasks.map((task) => task.id)))
+    : [];
+  const blocked = dependencyRows
+    .map((row) => {
+      const predecessor = taskById.get(row.predecessorId);
+      const successor = taskById.get(row.successorId);
+      if (!predecessor || !successor || predecessor.status === "done" || successor.status === "done") return null;
+      return {
+        taskId: successor.id,
+        title: successor.title,
+        blockedBy: predecessor.title,
+      };
+    })
+    .filter((row): row is { taskId: string; title: string; blockedBy: string } => row !== null);
+
+  const latestDeliveries = new Map<string, { status: "submitted" | "approved" | "rejected"; reviewNote: string | null }>();
+  if (tasks.length > 0) {
+    const deliveryRows = await db
+      .select({ taskId: taskDeliveries.taskId, status: taskDeliveries.status, reviewNote: taskDeliveries.reviewNote })
+      .from(taskDeliveries)
+      .where(inArray(taskDeliveries.taskId, tasks.map((task) => task.id)))
+      .orderBy(desc(taskDeliveries.submittedAt));
+    for (const row of deliveryRows) {
+      if (!latestDeliveries.has(row.taskId)) latestDeliveries.set(row.taskId, row);
+    }
+  }
+
+  const overdue = tasks
+    .filter((task) => task.status !== "done" && task.dueDate !== null && task.dueDate < today)
+    .map((task) => ({ taskId: task.id, title: task.title, dueDate: task.dueDate }));
+  const dueSoon = tasks
+    .filter((task) => task.status !== "done" && task.dueDate !== null && task.dueDate >= today && task.dueDate <= horizonEnd)
+    .map((task) => ({ taskId: task.id, title: task.title, dueDate: task.dueDate }));
+  const unassigned = tasks
+    .filter((task) => task.assigneeIds.length === 0)
+    .map((task) => ({ taskId: task.id, title: task.title, dueDate: task.dueDate }));
+  const deliveryRisks = tasks
+    .map((task) => {
+      const delivery = latestDeliveries.get(task.id);
+      if (!delivery || delivery.status === "approved") return null;
+      return { taskId: task.id, title: task.title, status: delivery.status, reviewNote: delivery.reviewNote };
+    })
+    .filter((row): row is { taskId: string; title: string; status: "submitted" | "rejected"; reviewNote: string | null } => row !== null);
+
+  const riskCount = overdue.length + blocked.length + deliveryRisks.filter((row) => row.status === "rejected").length;
+  return {
+    today,
+    horizonDays,
+    riskLevel: riskCount >= 3 ? "high" : riskCount > 0 ? "medium" : "low",
+    overdue,
+    dueSoon,
+    blocked,
+    unassigned,
+    deliveryRisks,
+  };
+}
+
 // AI SDK 工具装配：绑定 actorId/projectId，execute 委托纯函数
 export function buildTools(actorId: string, projectId: string) {
   return {
@@ -100,6 +182,13 @@ export function buildTools(actorId: string, projectId: string) {
       inputSchema: z.object({}),
       execute: async () => listMilestonesBrief(actorId, projectId),
     }),
+    analyze_risks: tool({
+      description: "分析当前项目风险：逾期任务、近期截止、未分配任务、依赖阻塞和交付验收状态。用户问风险、延期、进度隐患或下一步时使用。无需修改数据。",
+      inputSchema: z.object({
+        horizonDays: z.number().int().min(1).max(30).optional().describe("未来多少天视为近期，默认 7 天"),
+      }),
+      execute: async ({ horizonDays }) => analyzeProjectRisks(actorId, projectId, horizonDays ?? 7),
+    }),
     create_project: tool({
       description: "拟一个新项目草案（在当前项目所属团队下）。仅产草案，需人工确认后落库。",
       inputSchema: z.object({
@@ -119,6 +208,7 @@ export function buildTools(actorId: string, projectId: string) {
             description: z.string().optional(),
             assigneeId: z.string().optional(),
             assigneeIds: z.array(z.string()).optional().describe("多负责人（优先于 assigneeId）"),
+            acceptanceCriteria: z.string().optional().describe("验收标准"),
             dueDate: z.string().optional(),
             milestoneId: z.string().optional(),
             priority: z.enum(["low", "medium", "high"]).optional(),
@@ -138,6 +228,7 @@ export function buildTools(actorId: string, projectId: string) {
               status: z.enum(["todo", "doing", "done"]).optional(),
               assigneeId: z.string().optional(),
               assigneeIds: z.array(z.string()).optional().describe("多负责人（优先于 assigneeId）"),
+              acceptanceCriteria: z.string().optional().describe("验收标准"),
               dueDate: z.string().optional(),
               milestoneId: z.string().optional(),
               priority: z.enum(["low", "medium", "high"]).optional(),

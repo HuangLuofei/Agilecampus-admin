@@ -2,7 +2,12 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db";
 import { milestones, taskEvents, tasks } from "@/db/schema";
 import { createProject } from "@/lib/project";
-import { createGroupAssignmentTemplate, GROUP_ASSIGNMENT_STAGES } from "@/lib/project-template";
+import {
+  applyProjectTemplate,
+  createGroupAssignmentTemplate,
+  GROUP_ASSIGNMENT_STAGES,
+  PROJECT_TEMPLATES,
+} from "@/lib/project-template";
 import { createTeam, joinTeam } from "@/lib/team";
 import { createUser } from "@/lib/user";
 import { resetDb } from "./helpers";
@@ -18,7 +23,7 @@ async function scene() {
   const student = await makeUser("template-student@example.com");
   await joinTeam(student.id, team.inviteCode);
   const project = await createProject(owner.id, team.id, { name: "课程作业" });
-  return { owner, student, project };
+  return { owner, student, team, project };
 }
 
 describe("小组作业模板", () => {
@@ -44,6 +49,35 @@ describe("小组作业模板", () => {
 
     await createGroupAssignmentTemplate(owner.id, project.id);
     await expect(createGroupAssignmentTemplate(owner.id, project.id)).rejects.toThrow("已存在作业模板阶段");
+    expect(await db.select().from(milestones).where(eq(milestones.projectId, project.id))).toHaveLength(5);
+    expect(await db.select().from(tasks).where(eq(tasks.projectId, project.id))).toHaveLength(5);
+  });
+
+  it("模板中心的每个内置模板都能建立阶段、任务和验收标准", async () => {
+    const { owner, team, project } = await scene();
+
+    for (const template of PROJECT_TEMPLATES) {
+      const target = template.id === "group-assignment"
+        ? project
+        : await createProject(owner.id, team.id, { name: template.name });
+      await applyProjectTemplate(owner.id, target.id, template.id);
+      const projectMilestones = await db.select().from(milestones).where(eq(milestones.projectId, target.id));
+      const projectTasks = await db.select().from(tasks).where(eq(tasks.projectId, target.id));
+
+      expect(projectMilestones).toHaveLength(template.stages.length);
+      expect(projectTasks).toHaveLength(template.stages.length);
+      expect(projectTasks.every((task) => Boolean(task.acceptanceCriteria))).toBe(true);
+    }
+  });
+
+  it("模板应用严格限制为项目所属团队组长，并保持原子性", async () => {
+    const { owner, student, project } = await scene();
+    await expect(applyProjectTemplate(student.id, project.id, "research-project")).rejects.toThrow("没有权限");
+    await expect(applyProjectTemplate(owner.id, "00000000-0000-0000-0000-000000000000", "research-project"))
+      .rejects.toThrow("没有权限");
+
+    await applyProjectTemplate(owner.id, project.id, "research-project");
+    await expect(applyProjectTemplate(owner.id, project.id, "research-project")).rejects.toThrow("已存在");
     expect(await db.select().from(milestones).where(eq(milestones.projectId, project.id))).toHaveLength(5);
     expect(await db.select().from(tasks).where(eq(tasks.projectId, project.id))).toHaveLength(5);
   });

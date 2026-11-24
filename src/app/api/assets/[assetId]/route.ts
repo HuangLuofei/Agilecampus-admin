@@ -11,6 +11,8 @@ const patchSchema = z.object({
   isArchived: z.boolean().optional(),
   // 交付物类型：presentation/survey/code，显式传 null 清为普通文件
   deliverableKind: z.enum(["presentation", "survey", "code"]).nullish(),
+  reviewStatus: z.enum(["draft", "in_review", "approved", "changes_requested"]).optional(),
+  reviewNote: z.string().trim().max(2000, "审阅说明不能超过 2000 字").nullable().optional(),
 });
 
 // 编辑资产：归档中仅允许「取消归档」，其余变更 403

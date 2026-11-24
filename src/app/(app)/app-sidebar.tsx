@@ -60,6 +60,7 @@ export function AppSidebar({
         <NavItem href={workbenchHref} label="工作台" icon="▦" active={isActive("/projects")} />
         <NavItem href={scopedHref("/tasks", focusedTeam?.id)} label="我的任务" icon="✓" active={isActive("/tasks")} />
         <NavItem href={scopedHref("/calendar", focusedTeam?.id)} label="截止日历" icon="▦" active={isActive("/calendar")} />
+        <NavItem href="/templates" label="模板中心" icon="▤" active={isActive("/templates")} />
         <NavItem href="/settings/profile" label="个人信息" icon="◉" active={isActive("/settings/profile")} />
         {focusedTeam && (
           <div className="rounded-field bg-white/10 px-2.5 py-2 text-xs text-white/85">

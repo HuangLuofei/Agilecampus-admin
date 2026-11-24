@@ -284,6 +284,15 @@ function EditModal({
               placeholder="任务描述"
             />
           </Field>
+          <Field label="验收标准">
+            <textarea
+              name="acceptanceCriteria"
+              defaultValue={task.acceptanceCriteria ?? ""}
+              rows={2}
+              className="ac-field text-sm"
+              placeholder="完成报告并上传 PDF、演示文稿等"
+            />
+          </Field>
           <Field label="完成情况（完成时填写）">
             <textarea
               name="completionNote"

@@ -22,10 +22,11 @@ const SYSTEM_PREAMBLE = `你是 AgileCampus（敏捷校园）的项目管理助�
 
 ## 工具选用
 - 问进度、要统计 → query_progress
+- 问风险、延期、阻塞、未分配或验收隐患 → analyze_risks
 - 要任务清单，或改任务前需先取 taskId → list_tasks
 - 问「我有哪些项目」、需跨项目比较 → list_projects
 - 需要 milestoneId 而快照未列出 → list_milestones
-- 用户要新建或拆解任务 → decompose_tasks（**哪怕只建一个任务也用它**）
+- 用户要新建或拆解任务 → decompose_tasks（**哪怕只建一个任务也用它**）；能判断交付要求时同时填写 acceptanceCriteria
 - 改任务的状态/负责人/截止日/优先级 → 先 list_tasks 取 id 与现状，再 update_tasks
 - 把若干任务归入某里程碑并统一截止日 → plan_sprint
 - 新建项目 → create_project；新建里程碑（阶段节点）→ create_milestone

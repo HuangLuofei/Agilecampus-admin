@@ -10,6 +10,7 @@ import { updateRoleAction } from "./actions";
 import { reviewJoinRequestAction } from "../../actions";
 import { InvitePanel } from "./invite-panel";
 import { BackButton } from "@/components/back-button";
+import { LeaveTeamButton, RemoveMemberButton } from "./member-actions";
 
 export default async function MembersPage({
   params,
@@ -43,6 +44,7 @@ export default async function MembersPage({
     .where(eq(teamMembers.teamId, teamId));
 
   const isLead = isTeamLead(me.role);
+  const adminCount = members.filter((m) => m.role === "admin").length;
 
   // 组长管理面：待审申请 + 邀请链接 + 可关联项目
   const [joinRequests, links, teamProjects] = isLead
@@ -66,6 +68,15 @@ export default async function MembersPage({
         <BackButton fallbackHref={`/teams/${teamId}`} />
         <h1 className="font-display text-2xl font-semibold text-ink">{team.name} · 成员</h1>
       </header>
+
+      <section className="ac-card space-y-2 p-4 text-sm">
+        <h2 className="font-medium text-ink">成员权限</h2>
+        <div className="grid gap-2 text-xs text-ink-soft sm:grid-cols-3">
+          <p><span className="font-medium text-primary">组长</span> 管理成员、邀请链接、项目、任务调度和交付验收。</p>
+          <p><span className="font-medium text-low">成员</span> 参与项目、编辑自己负责的任务、提交交付成果。</p>
+          <p><span className="font-medium text-accent">导师</span> 查看项目并提供反馈，不能修改任务或审核交付。</p>
+        </div>
+      </section>
 
       {isLead && joinRequests.length > 0 && (
         <section className="space-y-2">
@@ -129,20 +140,28 @@ export default async function MembersPage({
               )}
             </div>
             {isLead && m.userId !== session.user.id ? (
-              <form action={updateRoleAction} className="flex items-center gap-2">
-                <input type="hidden" name="teamId" value={teamId} />
-                <input type="hidden" name="userId" value={m.userId} />
-                {/* key=role：角色变更后强制重挂载，使 defaultValue 重新采纳（非受控 select 不更新已挂载节点） */}
-                <select key={m.role} name="role" defaultValue={m.role} className="ac-field w-auto py-1 text-sm">
-                  <option value="admin">组长</option>
-                  <option value="student">成员</option>
-                  {/* teacher 为遗留角色，仅当成员当前是导师时保留该选项，避免误发放 */}
-                  {m.role === "teacher" && <option value="teacher">导师</option>}
-                </select>
-                <button className="ac-btn px-2 py-1 text-xs">保存</button>
-              </form>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <form action={updateRoleAction} className="flex items-center gap-2">
+                  <input type="hidden" name="teamId" value={teamId} />
+                  <input type="hidden" name="userId" value={m.userId} />
+                  {/* key=role：角色变更后强制重挂载，使 defaultValue 重新采纳（非受控 select 不更新已挂载节点） */}
+                  <select key={m.role} name="role" defaultValue={m.role} className="ac-field w-auto py-1 text-sm">
+                    <option value="admin">组长</option>
+                    <option value="student">成员</option>
+                    {/* teacher 为遗留角色，仅当成员当前是导师时保留该选项，避免误发放 */}
+                    {m.role === "teacher" && <option value="teacher">导师</option>}
+                  </select>
+                  <button className="ac-btn px-2 py-1 text-xs">保存</button>
+                </form>
+                <RemoveMemberButton teamId={teamId} userId={m.userId} name={m.name} />
+              </div>
             ) : (
-              <span className="text-sm text-ink-soft">{displayRole(m.role)}</span>
+              <div className="space-y-2 text-right">
+                <span className="block text-sm text-ink-soft">{displayRole(m.role)}</span>
+                {m.userId === session.user.id && (m.role !== "admin" || adminCount > 1) && (
+                  <LeaveTeamButton teamId={teamId} />
+                )}
+              </div>
             )}
           </li>
         ))}

@@ -11,7 +11,21 @@ type Assignment = CalendarData["assignments"][number];
 type Item = { id: string; kind: "course" | "project"; date: string; time: string;
   title: string; source: string; completed: boolean; projectId?: string; assignment?: Assignment };
 const WEEKDAYS = ["一", "二", "三", "四", "五", "六", "日"];
+const COURSE_COLORS = [
+  { value: "red", label: "红色", swatch: "bg-rose-500", event: "bg-rose-100 text-rose-800" },
+  { value: "orange", label: "橙色", swatch: "bg-orange-500", event: "bg-orange-100 text-orange-800" },
+  { value: "amber", label: "琥珀色", swatch: "bg-amber-400", event: "bg-amber-100 text-amber-800" },
+  { value: "green", label: "绿色", swatch: "bg-emerald-500", event: "bg-emerald-100 text-emerald-800" },
+  { value: "cyan", label: "青色", swatch: "bg-cyan-500", event: "bg-cyan-100 text-cyan-800" },
+  { value: "blue", label: "蓝色", swatch: "bg-blue-500", event: "bg-blue-100 text-blue-800" },
+  { value: "violet", label: "紫色", swatch: "bg-violet-500", event: "bg-violet-100 text-violet-800" },
+  { value: "pink", label: "粉色", swatch: "bg-pink-500", event: "bg-pink-100 text-pink-800" },
+] as const;
 const subscribe = () => () => {};
+
+function courseColor(value: string) {
+  return COURSE_COLORS.find((color) => color.value === value) ?? COURSE_COLORS[5];
+}
 
 function dayKey(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -54,7 +68,7 @@ export function DeadlineCalendar({ initial, teamId, focusedAssignment }: {
       const due = new Date(assignment.dueAt);
       return { id: assignment.id, kind: "course" as const, date: dayKey(due),
         time: due.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false }),
-        title: assignment.title, source: assignment.courseName,
+      title: assignment.title, source: assignment.courseName,
         completed: !!assignment.completedAt, assignment };
     }),
     ...initial.tasks.filter((task) => task.date).map((task) => ({
@@ -89,7 +103,7 @@ export function DeadlineCalendar({ initial, teamId, focusedAssignment }: {
     const rawDate = String(data.get("dueAt") ?? "");
     const due = new Date(rawDate);
     if (!rawDate || Number.isNaN(due.getTime())) { setError("请选择有效的截止时间"); return; }
-    const body = { courseName: data.get("courseName"), title: data.get("title"), details: data.get("details"),
+    const body = { courseName: data.get("courseName"), color: data.get("color"), title: data.get("title"), details: data.get("details"),
       dueAt: due.toISOString(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       remindDays: [7, 3, 1].filter((n) => data.get(`remind${n}`) === "on") };
     setBusy(true); setError(null);
@@ -102,7 +116,10 @@ export function DeadlineCalendar({ initial, teamId, focusedAssignment }: {
       const result = await res.json();
       if (!res.ok) throw new Error(result.error ?? "保存失败");
       const next = result.assignment as Assignment;
-      setAssignments((list) => current === "new" ? [...list, next] : list.map((item) => item.id === next.id ? next : item));
+      setAssignments((list) => current === "new" ? [...list, next].map((item) =>
+        item.courseName === next.courseName ? { ...item, color: next.color } : item)
+        : list.map((item) => item.id === next.id || item.courseName === next.courseName
+          ? { ...item, color: next.color, ...(item.id === next.id ? next : {}) } : item));
       setSelected(dayKey(new Date(next.dueAt)));
       setEditing(null);
       router.refresh();
@@ -171,8 +188,8 @@ export function DeadlineCalendar({ initial, teamId, focusedAssignment }: {
             aria-label={`${date}，${dayItems.length} 项截止`} aria-pressed={date === selected}
             className={`min-h-16 min-w-0 border-r border-t border-line p-1 text-left align-top transition-colors hover:bg-primary-soft sm:min-h-24 sm:p-2 ${date === selected ? "bg-primary-soft" : ""} ${otherMonth ? "bg-sunken/50 text-ink-faint" : ""}`}>
             <span className={`inline-grid h-6 w-6 place-items-center rounded-full text-xs ${date === today ? "bg-primary text-white" : ""}`}>{Number(date.slice(8))}</span>
-            <span className="mt-1 flex gap-0.5 sm:hidden">{dayItems.slice(0, 3).map((item) => <i key={`${item.kind}-${item.id}`} className={`h-1.5 w-1.5 rounded-full ${item.completed ? "bg-line-strong" : item.kind === "course" ? "bg-accent" : "bg-primary"}`} />)}</span>
-            <span className="hidden space-y-0.5 sm:block">{dayItems.slice(0, 2).map((item) => <span key={`${item.kind}-${item.id}`} className={`block truncate rounded px-1 text-[11px] ${item.completed ? "bg-sunken text-ink-faint line-through" : item.kind === "course" ? "bg-accent-soft text-accent" : "bg-primary-soft text-primary"}`}>{item.title}</span>)}
+            <span className="mt-1 flex gap-0.5 sm:hidden">{dayItems.slice(0, 3).map((item) => <i key={`${item.kind}-${item.id}`} className={`h-1.5 w-1.5 rounded-full ${item.completed ? "bg-line-strong" : item.kind === "course" ? courseColor(item.assignment!.color).swatch : "bg-primary"}`} />)}</span>
+            <span className="hidden space-y-0.5 sm:block">{dayItems.slice(0, 2).map((item) => <span key={`${item.kind}-${item.id}`} className={`block truncate rounded px-1 text-[11px] ${item.completed ? "bg-sunken text-ink-faint line-through" : item.kind === "course" ? courseColor(item.assignment!.color).event : "bg-primary-soft text-primary"}`}>{item.title}</span>)}
               {dayItems.length > 2 && <span className="block text-[10px] text-ink-soft">+{dayItems.length - 2} 项</span>}</span>
           </button>;
         })}
@@ -183,7 +200,7 @@ export function DeadlineCalendar({ initial, teamId, focusedAssignment }: {
       <h2 className="text-base font-semibold text-ink">{localDate(selected).toLocaleDateString("zh-CN", { month: "long", day: "numeric", weekday: "long" })} · {selectedItems.length} 项</h2>
       {selectedItems.length === 0 ? <p className="py-6 text-sm text-ink-soft">这一天没有截止事项</p> :
         <ul className="divide-y divide-line border-y border-line">{selectedItems.map((item) => <li key={`${item.kind}-${item.id}`} className="flex flex-wrap items-center gap-3 py-3">
-          <span className={`h-2 w-2 shrink-0 rounded-full ${item.completed ? "bg-line-strong" : item.kind === "course" ? "bg-accent" : "bg-primary"}`} />
+          <span className={`h-2 w-2 shrink-0 rounded-full ${item.completed ? "bg-line-strong" : item.kind === "course" ? courseColor(item.assignment!.color).swatch : "bg-primary"}`} />
           <div className="min-w-0 flex-1"><div className={`font-medium ${item.completed ? "text-ink-faint line-through" : "text-ink"}`}>{item.title}</div>
             <p className="text-xs text-ink-soft">{item.kind === "course" ? "课程" : "项目"} · {item.source} · {item.time}</p></div>
           {item.kind === "project" ? <Link className="text-sm text-primary" href={scopedHref(`/projects/${item.projectId}?task=${item.id}`, teamId)}>查看任务</Link> :
@@ -201,6 +218,7 @@ export function DeadlineCalendar({ initial, teamId, focusedAssignment }: {
         <div className="flex items-center justify-between"><h2 id="assignment-dialog-title" className="text-lg font-semibold text-ink">{editing === "new" ? "添加课程作业" : "编辑课程作业"}</h2>
           <button type="button" aria-label="关闭" onClick={() => setEditing(null)} className="text-xl text-ink-soft">×</button></div>
         <label className="block space-y-1 text-sm text-ink-soft">课程名称<input name="courseName" required maxLength={80} defaultValue={editing === "new" ? "" : editing.courseName} className="ac-field" /></label>
+        <fieldset className="space-y-2"><legend className="text-sm text-ink-soft">课程颜色</legend><div className="flex flex-wrap gap-2">{COURSE_COLORS.map((color) => <label key={color.value} title={color.label} className="grid h-9 w-9 cursor-pointer place-items-center rounded-full border border-line"><input className="sr-only peer" type="radio" name="color" value={color.value} aria-label={color.label} defaultChecked={editing === "new" ? color.value === "blue" : editing.color === color.value} /><span className={`h-5 w-5 rounded-full ${color.swatch} peer-checked:ring-2 peer-checked:ring-offset-2 peer-checked:ring-ink`} /></label>)}</div></fieldset>
         <label className="block space-y-1 text-sm text-ink-soft">作业名称<input name="title" required maxLength={160} defaultValue={editing === "new" ? "" : editing.title} className="ac-field" /></label>
         <label className="block space-y-1 text-sm text-ink-soft">截止时间<input name="dueAt" type="datetime-local" required defaultValue={editing === "new" ? `${selected}T23:59` : dateTimeInput(editing.dueAt)} className="ac-field" /></label>
         <label className="block space-y-1 text-sm text-ink-soft">备注<textarea name="details" maxLength={2000} rows={2} defaultValue={editing === "new" ? "" : editing.details ?? ""} className="ac-field" /></label>

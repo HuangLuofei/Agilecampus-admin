@@ -22,8 +22,8 @@ export function ChatPanel({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function send() {
-    const text = input.trim();
+  async function send(textOverride?: string) {
+    const text = (textOverride ?? input).trim();
     if (!text || pending) return;
     setInput("");
     setError(null);
@@ -68,6 +68,19 @@ export function ChatPanel({
         )}
       </div>
       {error && <p className="text-sm text-high">{error}</p>}
+      <div className="flex flex-wrap gap-1.5">
+        {["分析项目风险", "找出未分配任务", "总结当前进展"].map((suggestion) => (
+          <button
+            key={suggestion}
+            type="button"
+            disabled={pending}
+            onClick={() => send(suggestion)}
+            className="ac-btn-ghost px-2 py-1 text-xs"
+          >
+            {suggestion}
+          </button>
+        ))}
+      </div>
       <div className="flex gap-2">
         <input
           value={input}
@@ -77,7 +90,7 @@ export function ChatPanel({
           className="ac-field flex-1 text-sm"
           disabled={pending}
         />
-        <button onClick={send} disabled={pending} className="ac-btn px-3 py-2 text-sm">
+        <button onClick={() => send()} disabled={pending} className="ac-btn px-3 py-2 text-sm">
           {pending ? "思考中…" : "发送"}
         </button>
       </div>

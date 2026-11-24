@@ -246,6 +246,7 @@ function DraftCard({
     const d = data as {
       tasks: {
         title: string;
+        acceptanceCriteria?: string;
         assigneeId?: string;
         assigneeIds?: string[];
         priority?: string;
@@ -261,6 +262,12 @@ function DraftCard({
         {d.tasks.map((t, idx) => (
           <div key={idx} className="flex flex-wrap items-center gap-1 border-b border-line pb-1">
             <input value={t.title} onChange={(e) => setTask(idx, { title: e.target.value })} className="ac-field flex-1 text-xs" />
+            <input
+              value={t.acceptanceCriteria ?? ""}
+              onChange={(e) => setTask(idx, { acceptanceCriteria: e.target.value || undefined })}
+              placeholder="验收标准（可选）"
+              className="ac-field min-w-48 flex-1 text-xs"
+            />
             {/* AI 可能给出多负责人；此处下拉是「改为单一负责人」的快捷方式，选了即覆盖集合 */}
             <select
               value={t.assigneeId ?? ""}

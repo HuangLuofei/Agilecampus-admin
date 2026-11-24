@@ -8,6 +8,7 @@ import { getWorkbenchScope } from "./workbench";
 
 export const assignmentInputSchema = z.object({
   courseName: z.string().trim().min(1, "请填写课程名称").max(80),
+  color: z.enum(["red", "orange", "amber", "green", "cyan", "blue", "violet", "pink"]).default("blue"),
   title: z.string().trim().min(1, "请填写作业名称").max(160),
   details: z.string().trim().max(2000).default(""),
   dueAt: z.iso.datetime({ offset: true }),
@@ -23,6 +24,7 @@ export function normalizeAssignmentInput(input: unknown) {
   catch { throw new AppError("时区无效"); }
   return {
     courseName: parsed.courseName,
+    color: parsed.color,
     title: parsed.title,
     details: parsed.details || null,
     dueAt,
@@ -54,8 +56,13 @@ export async function listCalendarItems(userId: string, teamId?: string | null) 
 }
 
 export async function createCourseAssignment(userId: string, input: unknown) {
-  const [row] = await db.insert(courseAssignments).values({ userId, ...normalizeAssignmentInput(input) }).returning();
-  return row;
+  const data = normalizeAssignmentInput(input);
+  return db.transaction(async (tx) => {
+    const [row] = await tx.insert(courseAssignments).values({ userId, ...data }).returning();
+    await tx.update(courseAssignments).set({ color: data.color, updatedAt: new Date() })
+      .where(and(eq(courseAssignments.userId, userId), eq(courseAssignments.courseName, data.courseName)));
+    return row;
+  });
 }
 
 export async function updateCourseAssignment(userId: string, id: string, input: unknown) {
@@ -67,6 +74,8 @@ export async function updateCourseAssignment(userId: string, id: string, input: 
     if (!existing) throw new AppError("作业不存在");
     const [row] = await tx.update(courseAssignments).set({ ...data, updatedAt: new Date() })
       .where(and(eq(courseAssignments.id, id), eq(courseAssignments.userId, userId))).returning();
+    await tx.update(courseAssignments).set({ color: data.color, updatedAt: new Date() })
+      .where(and(eq(courseAssignments.userId, userId), eq(courseAssignments.courseName, data.courseName)));
     if (existing.dueAt.getTime() !== data.dueAt.getTime() ||
       existing.remindDays.join(",") !== data.remindDays.join(",") || existing.timeZone !== data.timeZone) {
       await tx.delete(courseAssignmentReminderDeliveries).where(eq(courseAssignmentReminderDeliveries.assignmentId, id));

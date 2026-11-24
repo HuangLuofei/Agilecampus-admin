@@ -7,10 +7,12 @@ export type JoinProjectOption = { id: string; name: string };
 
 export function JoinForm({
   teamId,
+  inviteToken,
   defaultProjectId,
   projects,
 }: {
   teamId: string;
+  inviteToken: string;
   defaultProjectId: string | null;
   projects: JoinProjectOption[];
 }) {
@@ -28,6 +30,7 @@ export function JoinForm({
   return (
     <form action={formAction} className="space-y-3">
       <input type="hidden" name="teamId" value={teamId} />
+      <input type="hidden" name="inviteToken" value={inviteToken} />
       <label className="block space-y-1 text-sm">
         <span className="block text-ink-soft">加入方式</span>
         <select

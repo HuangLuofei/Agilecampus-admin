@@ -4,6 +4,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { createTask, updateTask, deleteTask, setTaskSuccessors } from "@/lib/task";
+import { reviewTaskDelivery, submitTaskDelivery } from "@/lib/task-delivery";
 import { setTaskLabels } from "@/lib/label";
 import { createMilestone } from "@/lib/project";
 import { createGroupAssignmentTemplate } from "@/lib/project-template";
@@ -27,6 +28,7 @@ const createTaskSchema = z.object({
   projectId: z.uuid(),
   title: z.string().trim().min(1, "请填写任务标题"),
   description: z.string().trim().optional(),
+  acceptanceCriteria: z.string().trim().max(5000, "验收标准不能超过 5000 字").optional(),
   assigneeIds: z.array(z.uuid()).optional(),
   startDate: z.iso.date("日期格式不正确").optional(),
   dueDate: z.iso.date("日期格式不正确").optional(),
@@ -168,6 +170,7 @@ const updateTaskSchema = z.object({
   projectId: z.uuid(),
   title: z.string().trim().min(1, "标题不可为空"),
   description: z.string().trim().optional(),
+  acceptanceCriteria: z.string().trim().max(5000, "验收标准不能超过 5000 字").optional(),
   // 编辑弹窗恒渲染负责人多选控件，故此处为「必有」：空数组即清空负责人
   assigneeIds: z.array(z.uuid()),
   milestoneId: z.uuid().optional(),
@@ -207,6 +210,7 @@ export async function updateTaskAction(
     await updateTask(session.user.id, taskId, {
       title: patch.title,
       description: patch.description ?? null,
+      acceptanceCriteria: patch.acceptanceCriteria?.trim() || null,
       assigneeIds: patch.assigneeIds,
       milestoneId: patch.milestoneId ?? null,
       startDate: patch.startDate ?? null,
@@ -224,6 +228,66 @@ export async function updateTaskAction(
   revalidatePath(`/projects/${projectId}`);
   revalidatePath("/", "layout");
   return { ok: true };
+}
+
+const submitTaskDeliverySchema = z.object({
+  projectId: z.uuid(),
+  taskId: z.uuid(),
+  note: z.string().trim().min(1, "请填写交付说明").max(5000, "交付说明不能超过 5000 字"),
+});
+
+export async function submitTaskDeliveryAction(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const session = await auth();
+  if (!session?.user) return { error: "请先登录" };
+  const parsed = submitTaskDeliverySchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  try {
+    await submitTaskDelivery(session.user.id, parsed.data.taskId, parsed.data.note);
+  } catch (e) {
+    if (e instanceof ForbiddenError) return { error: e.message };
+    if (e instanceof AppError) return { error: e.message };
+    throw e;
+  }
+  revalidatePath(`/projects/${parsed.data.projectId}`);
+  revalidatePath("/", "layout");
+  return null;
+}
+
+const reviewTaskDeliverySchema = z.object({
+  projectId: z.uuid(),
+  deliveryId: z.uuid(),
+  decision: z.enum(["approved", "rejected"]),
+  reviewNote: z.string().trim().max(5000, "审核意见不能超过 5000 字").optional(),
+});
+
+export async function reviewTaskDeliveryAction(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const session = await auth();
+  if (!session?.user) return { error: "请先登录" };
+  const parsed = reviewTaskDeliverySchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  try {
+    await reviewTaskDelivery(
+      session.user.id,
+      parsed.data.deliveryId,
+      parsed.data.decision,
+      parsed.data.reviewNote,
+    );
+  } catch (e) {
+    if (e instanceof ForbiddenError) return { error: e.message };
+    if (e instanceof AppError) return { error: e.message };
+    throw e;
+  }
+  revalidatePath(`/projects/${parsed.data.projectId}`);
+  revalidatePath("/", "layout");
+  return null;
 }
 
 const deleteTaskSchema = z.object({

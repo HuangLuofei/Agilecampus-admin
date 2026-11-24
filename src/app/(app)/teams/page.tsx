@@ -41,9 +41,13 @@ export default async function TeamsPage() {
                     </span>
                     <RoleBadge role={t.role} />
                   </div>
-                  <p className="mt-1 text-xs text-ink-faint">
-                    邀请码 <span className="font-mono text-ink-soft">{t.inviteCode}</span>
-                  </p>
+                  {t.role === "admin" ? (
+                    <p className="mt-1 text-xs text-ink-faint">
+                      邀请码 <span className="font-mono text-ink-soft">{t.inviteCode}</span>
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-xs text-ink-faint">加入新成员请联系组长获取邀请链接</p>
+                  )}
                 </div>
               </div>
               <div className="mt-3 flex flex-wrap gap-2 border-t border-line pt-3">

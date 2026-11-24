@@ -33,6 +33,15 @@ export function canManageInviteLinks(role: TeamRoleValue | string): boolean {
   return isTeamLead(role);
 }
 
+// 成员管理与角色调整都属于组长能力；普通成员只能退出自己所在的小组。
+export function canManageMembers(role: TeamRoleValue | string): boolean {
+  return isTeamLead(role);
+}
+
+export function canLeaveTeam(role: TeamRoleValue | string): boolean {
+  return role === "student" || role === "teacher" || isTeamLead(role);
+}
+
 // 成员 2 使用：只有组长能发布正式周报（草稿人人可存）
 export function canPublishReport(role: TeamRoleValue | string): boolean {
   return isTeamLead(role);

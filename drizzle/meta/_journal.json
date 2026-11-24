@@ -15,6 +15,34 @@
       "when": 1790766000000,
       "tag": "0001_p0_collaboration",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1795017600000,
+      "tag": "0002_course_assignment_colors",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1795021200000,
+      "tag": "0003_task_delivery_review",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1795024800000,
+      "tag": "0004_project_retrospectives",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1795028400000,
+      "tag": "0005_file_document_collaboration",
+      "breakpoints": true
     }
   ]
 }

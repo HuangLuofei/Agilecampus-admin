@@ -3,7 +3,7 @@ import { extname, join } from "node:path";
 import { and, desc, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db } from "@/db";
-import { assets, documents, tasks, users, type AssetType } from "@/db/schema";
+import { assets, documents, tasks, users, type AssetReviewStatus, type AssetType } from "@/db/schema";
 import { AppError, ForbiddenError } from "./errors";
 import { getProjectForUser } from "./project";
 import { notifyTeamMembers } from "./notification";
@@ -184,6 +184,10 @@ export async function listProjectAssets(
       fileMime: assets.fileMime,
       fileSize: assets.fileSize,
       deliverableKind: assets.deliverableKind,
+      reviewStatus: assets.reviewStatus,
+      reviewNote: assets.reviewNote,
+      reviewedById: assets.reviewedById,
+      reviewedAt: assets.reviewedAt,
       isArchived: assets.isArchived,
       createdAt: assets.createdAt,
       updatedAt: assets.updatedAt,
@@ -210,6 +214,8 @@ export async function updateAsset(
     isArchived?: boolean;
     // 交付物类型：显式传 null 表示清为普通文件
     deliverableKind?: DeliverableKind | null;
+    reviewStatus?: AssetReviewStatus;
+    reviewNote?: string | null;
   },
 ) {
   const asset = await requireAssetAccess(actorId, assetId);
@@ -220,7 +226,9 @@ export async function updateAsset(
       patch.name === undefined &&
       patch.description === undefined &&
       patch.url === undefined &&
-      patch.deliverableKind === undefined;
+      patch.deliverableKind === undefined &&
+      patch.reviewStatus === undefined &&
+      patch.reviewNote === undefined;
     if (!onlyUnarchive) throw new ForbiddenError("资产已归档，禁止修改或删除");
   }
 
@@ -233,6 +241,12 @@ export async function updateAsset(
       ...(patch.url !== undefined && { url: patch.url }),
       ...(patch.isArchived !== undefined && { isArchived: patch.isArchived }),
       ...(patch.deliverableKind !== undefined && { deliverableKind: patch.deliverableKind }),
+      ...(patch.reviewStatus !== undefined && {
+        reviewStatus: patch.reviewStatus,
+        reviewedById: actorId,
+        reviewedAt: new Date(),
+      }),
+      ...(patch.reviewNote !== undefined && { reviewNote: patch.reviewNote?.trim() || null }),
       updatedAt: new Date(),
     })
     .where(eq(assets.id, assetId))

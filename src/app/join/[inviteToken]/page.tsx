@@ -78,6 +78,7 @@ export default async function JoinPage({
       ) : (
         <LoggedInState
           teamId={team.id}
+        inviteToken={inviteToken}
           defaultProjectId={project?.id ?? null}
         />
       )}
@@ -88,9 +89,11 @@ export default async function JoinPage({
 // 已登录：根据「成员记录 / 申请记录」展示对应状态；都不是才给申请表单
 async function LoggedInState({
   teamId,
+  inviteToken,
   defaultProjectId,
 }: {
   teamId: string;
+  inviteToken: string;
   defaultProjectId: string | null;
 }) {
   const session = await auth();
@@ -147,6 +150,7 @@ async function LoggedInState({
       )}
       <JoinForm
         teamId={teamId}
+        inviteToken={inviteToken}
         defaultProjectId={defaultProjectId}
         projects={teamProjects}
       />

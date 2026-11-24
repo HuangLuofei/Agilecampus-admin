@@ -70,7 +70,7 @@ export async function buildProjectSnapshot(actorId: string, projectId: string): 
             (t) =>
               `- [${t.status}] ${t.title}｜${
                 t.assignees.length > 0 ? t.assignees.map((a) => a.name).join("、") : "未指派"
-              }｜${t.dueDate ?? "无截止"}｜id=${t.id}`,
+              }｜${t.dueDate ?? "无截止"}${t.acceptanceCriteria ? `｜验收 ${t.acceptanceCriteria}` : ""}｜id=${t.id}`,
           )
           .join("\n") +
         (tasks.length > shownTasks.length

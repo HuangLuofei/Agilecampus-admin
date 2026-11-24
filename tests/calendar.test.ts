@@ -31,6 +31,8 @@ describe("课程作业日期", () => {
   it("拒绝无效时区，提醒天数去重", () => {
     expect(() => normalizeAssignmentInput({ ...input, timeZone: "invalid" })).toThrow("时区无效");
     expect(normalizeAssignmentInput({ ...input, remindDays: [1, 7, 1] }).remindDays).toEqual([7, 1]);
+    expect(normalizeAssignmentInput(input).color).toBe("blue");
+    expect(() => normalizeAssignmentInput({ ...input, color: "not-a-color" })).toThrow();
   });
 });
 
@@ -70,5 +72,16 @@ describe("课程作业数据与提醒", () => {
     expect(await db.select().from(courseAssignmentReminderDeliveries).where(eq(courseAssignmentReminderDeliveries.assignmentId, assignment.id))).toHaveLength(1);
     await setCourseAssignmentCompleted(owner.id, assignment.id, true);
     expect(await syncMyCourseReminders(owner.id, new Date("2026-11-16T18:00:00Z"))).toBe(0);
+  });
+
+  it("同一门课程的作业统一使用所选颜色，改色后同步更新", async () => {
+    const owner = await createUser({ email: "calendar-color@example.com", password: "password123", name: "丁" });
+    const first = await createCourseAssignment(owner.id, { ...input, color: "green" });
+    const second = await createCourseAssignment(owner.id, { ...input, title: "习题四", color: "violet" });
+
+    expect((await listCalendarItems(owner.id)).assignments.map((item) => item.color)).toEqual(["violet", "violet"]);
+    await updateCourseAssignment(owner.id, first.id, { ...input, color: "orange" });
+    expect((await listCalendarItems(owner.id)).assignments.map((item) => item.color)).toEqual(["orange", "orange"]);
+    expect(second.id).not.toBe(first.id);
   });
 });

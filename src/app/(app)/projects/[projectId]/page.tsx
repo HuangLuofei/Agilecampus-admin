@@ -22,6 +22,8 @@ import { BackButton } from "@/components/back-button";
 import Link from "next/link";
 import { scopedHref } from "@/lib/workbench-navigation";
 import { WorkflowTemplate } from "./workflow-template";
+import { listTaskDeliveries } from "@/lib/task-delivery";
+import { TaskDeliveryPanel } from "./task-delivery-panel";
 
 export default async function ProjectPage({
   params,
@@ -84,12 +86,13 @@ export default async function ProjectPage({
   const selectedTask = selectedTaskId
     ? projectTasks.find((task) => task.id === selectedTaskId) ?? null
     : null;
-  const [selectedComments, selectedEvents] = selectedTask
+  const [selectedComments, selectedEvents, selectedDeliveries] = selectedTask
     ? await Promise.all([
         listTaskComments(session.user.id, selectedTask.id),
         listTaskEvents(session.user.id, selectedTask.id),
+        listTaskDeliveries(session.user.id, selectedTask.id),
       ])
-    : [[], []];
+    : [[], [], []];
 
   const canWrite = role === "admin" || role === "student";
   const isAdmin = role === "admin";
@@ -150,6 +153,12 @@ export default async function ProjectPage({
               周报
             </a>
             <a
+              href={href(`/projects/${projectId}/retrospective`)}
+              className="ac-btn-ghost whitespace-nowrap"
+            >
+              项目复盘
+            </a>
+            <a
               href={href(`/projects/${projectId}/assets`)}
               className="ac-btn-ghost whitespace-nowrap"
             >
@@ -189,6 +198,7 @@ export default async function ProjectPage({
             id: t.id,
             title: t.title,
             description: t.description,
+            acceptanceCriteria: t.acceptanceCriteria,
             completionNote: t.completionNote,
             status: t.status,
             priority: t.priority,
@@ -245,6 +255,14 @@ export default async function ProjectPage({
           <div className="mt-4">
             <TaskAssets projectId={projectId} taskId={selectedTask.id} canWrite={canWrite} />
           </div>
+          <TaskDeliveryPanel
+            projectId={projectId}
+            taskId={selectedTask.id}
+            acceptanceCriteria={selectedTask.acceptanceCriteria}
+            deliveries={selectedDeliveries}
+            currentUserId={session.user.id}
+            canReview={isAdmin}
+          />
           <TaskCollaboration
             projectId={projectId}
             taskId={selectedTask.id}

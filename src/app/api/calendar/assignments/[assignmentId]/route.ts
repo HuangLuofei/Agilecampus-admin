@@ -32,7 +32,7 @@ export async function PATCH(req: Request, context: Context) {
     const command = z.discriminatedUnion("kind", [
       z.object({ kind: z.literal("complete"), completed: z.boolean() }),
       z.object({ kind: z.literal("edit"), courseName: z.unknown(), title: z.unknown(),
-        details: z.unknown(), dueAt: z.unknown(), timeZone: z.unknown(), remindDays: z.unknown() }),
+        color: z.unknown(), details: z.unknown(), dueAt: z.unknown(), timeZone: z.unknown(), remindDays: z.unknown() }),
     ]).parse(body);
     const assignment = command.kind === "complete"
       ? await setCourseAssignmentCompleted(actor.userId!, actor.assignmentId!, command.completed)

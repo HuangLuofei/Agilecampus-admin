@@ -2,8 +2,9 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { createUser } from "@/lib/user";
 import { createTeam, joinTeam } from "@/lib/team";
 import { createProject, createMilestone } from "@/lib/project";
-import { createTask } from "@/lib/task";
-import { queryProgress, listTasksFiltered } from "@/lib/agent/tools";
+import { createTask, setTaskSuccessors } from "@/lib/task";
+import { analyzeProjectRisks, queryProgress, listTasksFiltered } from "@/lib/agent/tools";
+import { reviewTaskDelivery, submitTaskDelivery } from "@/lib/task-delivery";
 import { resetDb } from "./helpers";
 
 async function makeUser(email: string) {
@@ -70,5 +71,39 @@ describe("listTasksFiltered", () => {
     const due = await listTasksFiltered(student.id, project.id, { dueBefore: "2026-10-31" });
     expect(due).toHaveLength(1);
     expect(due[0].title).toBe("早");
+  });
+});
+
+describe("analyzeProjectRisks", () => {
+  beforeEach(resetDb);
+
+  it("识别逾期、未分配、依赖阻塞和待修改交付", async () => {
+    const { owner, student, project } = await scene();
+    const predecessor = await createTask(student.id, project.id, {
+      title: "准备数据",
+      dueDate: "2020-01-01",
+      assigneeId: student.id,
+    });
+    const successor = await createTask(student.id, project.id, {
+      title: "撰写分析",
+      acceptanceCriteria: "提交分析报告",
+      assigneeId: student.id,
+    });
+    await createTask(student.id, project.id, { title: "整理素材" });
+    await setTaskSuccessors(student.id, predecessor.id, [successor.id]);
+    const delivery = await submitTaskDelivery(student.id, successor.id, "初版报告");
+    await reviewTaskDelivery(owner.id, delivery.id, "rejected", "补充数据来源");
+
+    const result = await analyzeProjectRisks(student.id, project.id, 7);
+    expect(result.overdue.some((task) => task.title === "准备数据")).toBe(true);
+    expect(result.unassigned.some((task) => task.title === "整理素材")).toBe(true);
+    expect(result.blocked.some((task) => task.title === "撰写分析" && task.blockedBy === "准备数据")).toBe(true);
+    expect(result.deliveryRisks.some((task) => task.title === "撰写分析" && task.status === "rejected")).toBe(true);
+    expect(result.riskLevel).toBe("high");
+  });
+
+  it("非项目成员不能读取风险分析", async () => {
+    const { outsider, project } = await scene();
+    await expect(analyzeProjectRisks(outsider.id, project.id)).rejects.toThrow("没有权限");
   });
 });

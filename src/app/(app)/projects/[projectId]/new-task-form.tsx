@@ -24,6 +24,7 @@ export function NewTaskForm({
       <input type="hidden" name="projectId" value={projectId} />
       <input name="title" placeholder="任务标题" className="ac-field" />
       <textarea name="description" placeholder="任务描述（可选）" rows={2} className="ac-field" />
+      <textarea name="acceptanceCriteria" placeholder="验收标准（可选，例如：完成报告并上传 PDF）" rows={2} className="ac-field" />
       <div className="space-y-1">
         <span className="text-xs font-medium text-ink-soft">负责人（可多选）</span>
         <MemberPicker members={members} name="assigneeIds" emptyHint="不选即未分配" />

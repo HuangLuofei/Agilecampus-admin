@@ -18,6 +18,7 @@ export type BoardTask = {
   id: string;
   title: string;
   description: string | null;
+  acceptanceCriteria: string | null;
   completionNote: string | null;
   status: "todo" | "doing" | "done";
   priority: string;

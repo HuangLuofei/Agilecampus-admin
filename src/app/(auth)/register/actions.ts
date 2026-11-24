@@ -7,7 +7,7 @@ import { AppError } from "@/lib/errors";
 import { profileFromFormData } from "@/lib/profile";
 
 const registerSchema = z.object({
-  name: z.string().trim().min(1, "请填写姓名").max(100, "姓名最长 100 字"),
+  name: z.string().trim().max(100, "姓名最长 100 字").optional(),
   studentId: z
     .string()
     .trim()
@@ -22,19 +22,27 @@ export async function registerAction(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const skipProfile = formData.get("skipProfile") === "true";
   const parsed = registerSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
   let profile;
-  try {
-    profile = profileFromFormData(formData);
-  } catch (e) {
-    if (e instanceof z.ZodError) return { error: e.issues[0].message };
-    throw e;
+  if (!skipProfile) {
+    if (!parsed.data.name) return { error: "请填写姓名" };
+    try {
+      profile = profileFromFormData(formData);
+    } catch (e) {
+      if (e instanceof z.ZodError) return { error: e.issues[0].message };
+      throw e;
+    }
   }
 
   try {
-    await createUser({ ...parsed.data, profile });
+    await createUser({
+      ...parsed.data,
+      name: parsed.data.name || `同学${parsed.data.studentId.slice(-4)}`,
+      profile,
+    });
   } catch (e) {
     if (e instanceof AppError) return { error: e.message };
     throw e;

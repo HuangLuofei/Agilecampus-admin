@@ -2,8 +2,9 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { createInviteLink, revokeInviteLink, updateMemberRole } from "@/lib/team";
+import { createInviteLink, leaveTeam, removeTeamMember, revokeInviteLink, updateMemberRole } from "@/lib/team";
 import { AppError } from "@/lib/errors";
 
 const schema = z.object({
@@ -20,6 +21,46 @@ export async function updateRoleAction(formData: FormData) {
   const parsed = schema.parse(Object.fromEntries(formData));
   await updateMemberRole(session.user.id, parsed.teamId, parsed.userId, parsed.role);
   revalidatePath(`/teams/${parsed.teamId}/members`);
+}
+
+export type MemberActionState = { error: string } | null;
+
+export async function removeMemberAction(
+  _prev: MemberActionState,
+  formData: FormData,
+): Promise<MemberActionState> {
+  const session = await auth();
+  if (!session?.user) return { error: "请先登录" };
+  const parsed = z.object({ teamId: z.uuid(), userId: z.uuid() }).safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: "参数无效" };
+  try {
+    await removeTeamMember(session.user.id, parsed.data.teamId, parsed.data.userId);
+  } catch (e) {
+    if (e instanceof AppError) return { error: e.message };
+    throw e;
+  }
+  revalidatePath(`/teams/${parsed.data.teamId}/members`);
+  revalidatePath("/teams");
+  return null;
+}
+
+export async function leaveTeamAction(
+  _prev: MemberActionState,
+  formData: FormData,
+): Promise<MemberActionState> {
+  const session = await auth();
+  if (!session?.user) return { error: "请先登录" };
+  const parsed = z.object({ teamId: z.uuid() }).safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: "参数无效" };
+  try {
+    await leaveTeam(session.user.id, parsed.data.teamId);
+  } catch (e) {
+    if (e instanceof AppError) return { error: e.message };
+    throw e;
+  }
+  revalidatePath(`/teams/${parsed.data.teamId}/members`);
+  revalidatePath("/teams");
+  redirect("/teams");
 }
 
 const createLinkSchema = z.object({
