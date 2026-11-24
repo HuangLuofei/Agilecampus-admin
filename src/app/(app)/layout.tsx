@@ -9,6 +9,7 @@ import { AppSidebar } from "./app-sidebar";
 import { DueReminderBanner } from "./due-reminder-banner";
 import { getWorkbenchReminders } from "@/lib/workbench-reminders";
 import { syncMyCourseReminders } from "@/lib/course-reminders";
+import { UserGuide } from "./user-guide";
 
 export default async function AppLayout({
   children,
@@ -43,6 +44,9 @@ export default async function AppLayout({
         </Suspense>
         <div className="mx-auto w-full max-w-6xl px-6 py-8">{children}</div>
       </div>
+      <Suspense>
+        <UserGuide />
+      </Suspense>
     </div>
   );
 }

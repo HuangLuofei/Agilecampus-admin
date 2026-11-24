@@ -5,7 +5,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { teamMembers, teams } from "@/db/schema";
 import { displayRole } from "@/lib/team-permissions";
-import { TeamForms } from "./team-forms";
+import { CopyInviteCode, TeamForms } from "./team-forms";
 
 export default async function TeamsPage() {
   const session = await auth();
@@ -43,7 +43,7 @@ export default async function TeamsPage() {
                   </div>
                   {t.role === "admin" ? (
                     <p className="mt-1 text-xs text-ink-faint">
-                      邀请码 <span className="font-mono text-ink-soft">{t.inviteCode}</span>
+                      邀请码 <CopyInviteCode code={t.inviteCode} />
                     </p>
                   ) : (
                     <p className="mt-1 text-xs text-ink-faint">加入新成员请联系组长获取邀请链接</p>

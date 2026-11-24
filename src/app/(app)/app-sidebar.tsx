@@ -43,7 +43,7 @@ export function AppSidebar({
     pathname === href || pathname.startsWith(`${href}/`);
 
   return (
-    <aside className="sticky top-0 flex h-screen w-60 shrink-0 flex-col bg-[linear-gradient(180deg,#004a9e_0%,#003c88_45%,#002f66_100%)] text-white">
+    <aside data-guide-id="sidebar" className="sticky top-0 flex h-screen w-60 shrink-0 flex-col bg-[linear-gradient(180deg,#004a9e_0%,#003c88_45%,#002f66_100%)] text-white">
       {/* 品牌 */}
       <Link href={workbenchHref} className="flex items-center gap-2.5 border-b border-white/15 px-4 py-4">
         <span className="grid h-7 w-7 place-items-center rounded-md bg-white font-display text-sm font-bold text-navy">
@@ -57,11 +57,11 @@ export function AppSidebar({
 
       {/* 导航 */}
       <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-3">
-        <NavItem href={workbenchHref} label="工作台" icon="▦" active={isActive("/projects")} />
-        <NavItem href={scopedHref("/tasks", focusedTeam?.id)} label="我的任务" icon="✓" active={isActive("/tasks")} />
-        <NavItem href={scopedHref("/calendar", focusedTeam?.id)} label="截止日历" icon="▦" active={isActive("/calendar")} />
-        <NavItem href="/templates" label="模板中心" icon="▤" active={isActive("/templates")} />
-        <NavItem href="/settings/profile" label="个人信息" icon="◉" active={isActive("/settings/profile")} />
+        <NavItem guideId="sidebar-workbench" href={workbenchHref} label="工作台" icon="▦" active={isActive("/projects")} />
+        <NavItem guideId="sidebar-tasks" href={scopedHref("/tasks", focusedTeam?.id)} label="我的任务" icon="✓" active={isActive("/tasks")} />
+        <NavItem guideId="sidebar-calendar" href={scopedHref("/calendar", focusedTeam?.id)} label="截止日历" icon="▦" active={isActive("/calendar")} />
+        <NavItem guideId="sidebar-templates" href="/templates" label="模板中心" icon="▤" active={isActive("/templates")} />
+        <NavItem guideId="sidebar-profile" href="/settings/profile" label="个人信息" icon="◉" active={isActive("/settings/profile")} />
         {focusedTeam && (
           <div className="rounded-field bg-white/10 px-2.5 py-2 text-xs text-white/85">
             <p className="truncate">专注于 {focusedTeam.name}</p>
@@ -69,7 +69,7 @@ export function AppSidebar({
           </div>
         )}
         {/* 消息：点击整行展开/收起「对话」「通知」 */}
-        <div>
+        <div data-guide-id="sidebar-messages">
           <button
             type="button"
             onClick={() => setMessagesOpen((v) => !v)}
@@ -109,7 +109,7 @@ export function AppSidebar({
           )}
         </div>
         {/* 设置：点击整行展开/收起 */}
-        <div>
+        <div data-guide-id="sidebar-settings">
           <button
             type="button"
             onClick={() => setSettingsOpen((v) => !v)}
@@ -132,6 +132,11 @@ export function AppSidebar({
                 href="/settings/tokens"
                 label="访问令牌"
                 active={pathname.startsWith("/settings/tokens")}
+              />
+              <SidebarSubLink
+                href="/settings/security"
+                label="账号安全"
+                active={pathname.startsWith("/settings/security")}
               />
             </>
           )}
@@ -211,6 +216,16 @@ export function AppSidebar({
         })}
 
         <Link
+          data-guide-id="sidebar-guide"
+          href="/guide"
+          className={`mt-2 flex items-center gap-2 rounded-field px-2.5 py-1.5 text-sm ${
+            isActive("/guide") ? "bg-white font-medium text-navy" : "text-white/70 hover:bg-white/10 hover:text-white"
+          }`}
+        >
+          <span className="w-4 text-center">?</span> 用户指南
+        </Link>
+        <Link
+          data-guide-id="sidebar-teams"
           href="/teams"
           className={`mt-2 flex items-center gap-2 rounded-field px-2.5 py-1.5 text-sm ${
             isActive("/teams")
@@ -237,12 +252,14 @@ export function AppSidebar({
 }
 
 function NavItem({
+  guideId,
   href,
   label,
   icon,
   active,
   badge,
 }: {
+  guideId?: string;
   href: string;
   label: string;
   icon: string;
@@ -251,6 +268,7 @@ function NavItem({
 }) {
   return (
     <Link
+      data-guide-id={guideId}
       href={href}
       className={`flex items-center gap-2.5 rounded-field px-2.5 py-2 text-sm ${
         active

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { createTeamAction, joinTeamAction, type FormState } from "./actions";
 
 export function TeamForms() {
@@ -34,5 +34,29 @@ export function TeamForms() {
         </button>
       </form>
     </div>
+  );
+}
+
+export function CopyInviteCode({ code }: { code: string }) {
+  const [status, setStatus] = useState<"idle" | "copied" | "error">("idle");
+
+  async function copyCode() {
+    try {
+      await navigator.clipboard.writeText(code);
+      setStatus("copied");
+    } catch {
+      setStatus("error");
+    }
+    window.setTimeout(() => setStatus("idle"), 1800);
+  }
+
+  return (
+    <span className="inline-flex items-center gap-2">
+      <span className="font-mono text-ink-soft">{code}</span>
+      <button type="button" onClick={copyCode} className="ac-btn-ghost px-2 py-0.5 text-xs">
+        {status === "copied" ? "已复制" : "复制邀请码"}
+      </button>
+      {status === "error" && <span role="status" className="text-xs text-high">复制失败</span>}
+    </span>
   );
 }
